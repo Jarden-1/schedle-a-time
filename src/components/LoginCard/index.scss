@@ -1,0 +1,150 @@
+.login-card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 16px;
+
+  &.login-card--no-title {
+    .login-title {
+      display: none;
+    }
+  }
+
+  &.login-card--no-tips {
+    .tips {
+      display: none;
+    }
+  }
+
+  .login-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 12px;
+  }
+
+  .form-item {
+    margin-bottom: 14px;
+
+    .label {
+      display: block;
+      font-size: 13px;
+      color: #666;
+      margin-bottom: 8px;
+    }
+
+    .avatar-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+
+      .avatar-preview {
+        width: 56px;
+        height: 56px;
+        border-radius: 50%;
+        background: #f3f3f3;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+
+        .avatar-img {
+          width: 100%;
+          height: 100%;
+          border-radius: 50%;
+        }
+
+        .avatar-placeholder {
+          font-size: 12px;
+          color: #999;
+        }
+      }
+
+      .btn {
+        flex: 1;
+        height: 40px;
+        background: rgba(7, 193, 96, 0.1);
+        color: #07c160;
+        font-size: 14px;
+        border: none;
+        border-radius: 8px;
+        /* 强行居中 */
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+        line-height: normal;
+        
+        &::after {
+          display: none;
+        }
+      }
+    }
+
+    .nickname-input {
+      height: 40px;
+      line-height: 40px;
+      border: 1px solid #eee;
+      border-radius: 8px;
+      padding: 0 12px;
+      font-size: 14px;
+    }
+  }
+
+  .actions {
+    display: flex;
+    gap: 12px;
+
+    .btn-secondary {
+      flex: 1;
+      height: 44px;
+      background: #fff;
+      color: #333;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 15px;
+      box-sizing: border-box;
+      
+      /* 👇 修复文字偏移的核心：使用 Flex 强行居中，干掉小程序默认样式干扰 👇 */
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      line-height: normal;
+
+      /* 干掉小程序自带的恶心边框 */
+      &::after {
+        display: none; 
+      }
+    }
+
+    .btn-primary {
+      flex: 2;
+      height: 44px;
+      background: #07c160;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 15px;
+      box-sizing: border-box;
+
+      /* 👇 同样使用 Flex 强行居中 👇 */
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      line-height: normal;
+
+      &::after {
+        display: none;
+      }
+    }
+  }
+
+  .tips {
+    margin-top: 10px;
+    font-size: 12px;
+    color: #999;
+    line-height: 18px;
+  }
+}

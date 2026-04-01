@@ -1,0 +1,172 @@
+.time-grid view,
+.time-grid text,
+.time-grid scroll-view,
+.time-grid image {
+  box-sizing: border-box;
+}
+
+.time-grid {
+  position: relative;
+  display: flex;
+  width: 100%;
+  background: #fff;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #eee;
+}
+
+.time-grid-left {
+  width: 76px; /* 原为 48px，加宽以容纳完整时间段 */
+  flex-shrink: 0;
+  border-right: 1px solid #eee;
+  background: #fff;
+  z-index: 5;
+  position: relative;
+}
+
+.time-grid-corner {
+  height: 32px;
+  border-bottom: 1px solid #eee;
+  background: #fafafa;
+  position: sticky;
+  top: 0;
+  z-index: 11; /* 层级必须最高，防止横竖向滑动时穿透 */
+}
+
+.time-grid-axis {
+  display: flex;
+  flex-direction: column;
+}
+
+.time-grid-axis-cell {
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-bottom: 1px solid #f0f0f0;
+  background: #fff;
+
+  /* 保留你原有的 height 等属性，只增加/覆盖以下内容： */
+  padding: 0 4px;
+
+  .axis-text {
+    font-size: 11px; /* 🚨 缩小一点字号，确保 "09:00-09:30" 这么长的字符不会挤爆换行 */
+    color: #999;
+    white-space: nowrap; /* 🚨 绝对禁止换行 */
+    text-align: center;
+  }
+
+  &.divider-after {
+    border-bottom: 2px solid #e0e0e0;
+  }
+}
+
+.time-grid-scroll {
+  flex: 1;
+  width: 0;
+  height: 100%;
+  background: #fff;
+  box-sizing: border-box;
+}
+
+.time-grid-scroll-inner {
+  display: block; /* 🚨 放弃 flex，使用 block 让内部内容自然撑开 */
+  min-width: 100%;
+  width: max-content;
+  /* 🚨 增加强效安全边距，防止回弹截断 */
+  padding-right: 36px;
+  box-sizing: border-box;
+}
+
+.time-grid-header, .time-grid-row {
+  display: flex;
+  flex-direction: row;
+  width: max-content; /* 让每一行都不缩水 */
+}
+
+.time-grid-header {
+  height: 32px;
+  display: flex;
+  flex-direction: row;
+  border-bottom: 1px solid #eee;
+  background: #fafafa;
+  position: sticky;
+  top: 0;
+  z-index: 10; /* 确保盖住下方网格 */
+}
+
+.time-grid-header-cell, .time-grid-cell {
+  /* 🚨 移除 max-content，换成固定的物理宽度，让格子撑开 */
+  width: 56px; /* 如果你觉得窄可以改成 60px 或 64px */
+  min-width: 56px;
+  flex-shrink: 0; /* 绝对禁止被压缩 */
+  flex-grow: 0;
+}
+
+.time-grid-header-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-right: 1px solid #f0f0f0;
+}
+
+.time-grid-header-date {
+  font-size: 10px;
+  font-weight: 700;
+  color: #333;
+  line-height: 12px;
+  white-space: nowrap;
+}
+
+.time-grid-header-week {
+  margin-top: 1px;
+  font-size: 9px;
+  color: #999;
+  line-height: 10px;
+  white-space: nowrap;
+}
+
+.time-grid-wrapper {
+  display: flex;
+  flex-direction: column;
+}
+
+.time-grid-row {
+  display: flex;
+  flex-direction: row;
+
+  &.divider-after {
+    .time-grid-cell {
+      border-bottom: 2px solid #e0e0e0;
+    }
+  }
+}
+
+.time-grid-cell {
+  height: 28px;
+  border-right: 1px solid #f0f0f0;
+  border-bottom: 1px solid #f0f0f0;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  /* 🚨 新增：让颜色和边框的变化像墨水晕染一样平滑 */
+  transition: background-color 0.1s ease-out, box-shadow 0.1s ease-out;
+
+  .heatmap-count-text {
+    font-size: 11px;
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 0px 1px 2px rgba(0, 0, 0, 0.4); /* 确保在浅色背景上也能看清 */
+  }
+
+  &.selected {
+    background: rgba(7, 193, 96, 0.25);
+    border-right-color: rgba(7, 193, 96, 0.2);
+    border-bottom-color: rgba(7, 193, 96, 0.2);
+    box-shadow: none;
+    z-index: 1;
+  }
+}

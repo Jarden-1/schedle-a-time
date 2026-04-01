@@ -1,0 +1,63 @@
+.swipe-action-container {
+  position: relative;
+  width: 100%;
+  overflow: visible; /* 🚨 绝对核心：释放卡片的阴影，拒绝粘连截断！ */
+
+  /* 彻底消灭 SwipeAction 的幽灵边框：让组件本体透明，避免底色被采样到圆角边缘 */
+  background: transparent !important;
+}
+
+.swipe-action-bg {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0; /* 彻底归零 */
+  height: 100%; /* 物理锁死：强行等于父容器（白卡片）的高度，一像素都不准多！ */
+  display: flex;
+  border-radius: 0 16px 16px 0;
+  overflow: hidden;
+  z-index: 0;
+
+  /*
+   * 根因修复：底层容器必须“完全透明”。
+   * 否则在高 DPR + transform 亚像素时，红色按钮背景会被抗锯齿采样到边缘，形成粉线。
+   */
+  background: transparent !important;
+
+  /*
+   * 关闭状态下的强制隐藏：防止底层按钮区域在 0 位移时仍被采样到边缘
+   * （通过 TSX 在关闭态注入 is-closed class）
+   */
+  &.is-closed {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+}
+
+.swipe-action-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+
+  &--warn {
+    background: #fa8c16;
+  }
+  &--danger {
+    background: #ff4d4f;
+  }
+}
+
+.swipe-action-fg {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  will-change: transform; /* 提示浏览器开启 GPU 加速 */
+  /* 核心修复：开启 flex 纵向排版，完美包裹卡片真实高度，拒绝边距折叠渗漏 */
+  display: flex;
+  flex-direction: column;
+}

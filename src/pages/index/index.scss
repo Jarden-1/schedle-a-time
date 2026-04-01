@@ -1,0 +1,272 @@
+.index-page {
+  min-height: 100vh;
+  background: #f5f5f5;
+  padding-bottom: calc(16px + 56px + env(safe-area-inset-bottom));
+
+  @keyframes createBtnHint {
+    0% {
+      transform: translateY(0) scale(1);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+    50% {
+      transform: translateY(-4px) scale(1.04);
+      box-shadow: 0 10px 18px rgba(0, 0, 0, 0.2);
+    }
+    100% {
+      transform: translateY(0) scale(1);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+  }
+
+  .hero-section {
+    background: linear-gradient(135deg, #07c160 0%, #05a350 100%);
+    padding: 40px 20px;
+
+    .hero-content {
+      text-align: center;
+
+      .hero-title {
+        display: block;
+        font-size: 28px;
+        font-weight: 700;
+        color: #fff;
+        margin-bottom: 8px;
+      }
+
+      .hero-subtitle {
+        display: block;
+        font-size: 14px;
+        color: rgba(255, 255, 255, 0.9);
+        margin-bottom: 24px;
+      }
+
+      .create-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: #fff;
+        color: #07c160;
+        font-size: 16px;
+        font-weight: 600;
+        padding: 14px 32px;
+        border-radius: 28px;
+        border: none;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+
+        &:active {
+          transform: scale(0.98);
+        }
+
+        &.create-btn--hint {
+          animation: createBtnHint 1.25s ease-in-out infinite;
+          will-change: transform;
+        }
+      }
+    }
+  }
+
+  .tab-section {
+    background: #fff;
+    padding: 0 20px;
+    border-bottom: 1px solid #eee;
+
+    .tab-list {
+      display: flex;
+
+      .tab-item {
+        flex: 1;
+        text-align: center;
+        padding: 16px 0;
+        position: relative;
+
+        &.active {
+          .tab-text {
+            color: #07c160;
+            font-weight: 600;
+          }
+
+          &::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 24px;
+            height: 3px;
+            background: #07c160;
+            border-radius: 2px;
+          }
+        }
+
+        .tab-text {
+          font-size: 14px;
+          color: #666;
+        }
+      }
+    }
+  }
+
+  .event-list {
+    padding: 16px;
+
+    /* 🚨 1. 装甲外壳：接管圆角、阴影，并用 overflow: hidden 物理切断一切底层漏出的红边 */
+    .event-item-wrapper {
+      position: relative;
+      margin-bottom: 12px;
+      background: #ffffff; /* 必须是白色，防止红边从圆角漏出 */
+      border-radius: 16px;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
+      overflow: hidden;
+      transform: translateZ(0);
+      display: flex;
+      flex-direction: column;
+
+      /* 清除 SwipeAction 自带的可能导致错位的背景和宽度干扰 */
+      .taro-swipe-action,
+      .taro-swipe-action__content,
+      .taro-swipe-action__options {
+        background: transparent !important;
+      }
+    }
+
+    .loading-text {
+      text-align: center;
+      padding: 40px;
+      color: #999;
+      font-size: 14px;
+    }
+
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 80px 20px;
+
+      .empty-icon {
+        font-size: 64px;
+        margin-bottom: 16px;
+      }
+
+      .empty-title {
+        font-size: 16px;
+        color: #333;
+        margin-bottom: 8px;
+      }
+
+      .empty-desc {
+        font-size: 14px;
+        color: #999;
+        margin-bottom: 24px;
+      }
+    }
+
+    /* 🚨 2. 绝对钢板：防止被 SwipeAction 的 flex 布局挤压导致文字靠左 */
+    .event-card {
+      position: relative;
+      width: 100%;
+      flex-shrink: 0;
+      background: #ffffff;
+      height: 100%;
+      min-height: 100%;
+      z-index: 2;
+
+      /* 剥离原来的外观属性，已交由 wrapper 接管 */
+      border: none;
+      border-radius: 0;
+      box-shadow: none;
+      padding: 0;
+      margin: 0;
+
+      &:active {
+        background-color: #f9f9f9;
+      }
+
+      /* 🚨 3. 安全隔离舱：在这里安心设置内边距，文字绝对安全 */
+      .card-inner {
+        padding: 16px 20px;
+        box-sizing: border-box;
+        width: 100%;
+
+        .event-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 14px;
+
+          .title-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex: 1;
+            min-width: 0;
+            margin-right: 12px;
+          }
+
+          .event-title {
+            font-size: 17px;
+            font-weight: 600;
+            color: #333;
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            line-height: 1.4;
+            padding: 2px 0;
+          }
+
+          .role-tag {
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 600;
+            white-space: nowrap;
+            flex-shrink: 0;
+          }
+
+          .creator-tag { color: #ff8f1f; background: rgba(255, 143, 31, 0.1); }
+          .admin-tag { color: #1677ff; background: rgba(22, 119, 255, 0.1); }
+
+          .status-tag {
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            flex-shrink: 0;
+            font-weight: 500;
+
+            &.active { background: rgba(7, 193, 96, 0.1); .tag-text { color: #07c160; } }
+            &.confirmed { background: rgba(24, 144, 255, 0.1); .tag-text { color: #1890ff; } }
+            &.closed { background: #f5f5f5; .tag-text { color: #999; } }
+          }
+        }
+
+        .event-info {
+          .info-item {
+            display: block;
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 8px;
+
+            &:last-child { margin-bottom: 0; }
+          }
+        }
+      }
+    }
+
+    /* 🚨 左滑暗示动效 (Peek Bounce) */
+    @keyframes peekBounceAnim {
+      0% { transform: translateX(0); }
+      15% { transform: translateX(-65px); } /* 快速向左拉出，露出部分按钮 */
+      30% { transform: translateX(0); }     /* 弹回 */
+      45% { transform: translateX(-15px); } /* 惯性二次微弹 */
+      60% { transform: translateX(0); }     /* 彻底归位 */
+      100% { transform: translateX(0); }
+    }
+
+    .peek-bounce {
+      animation: peekBounceAnim 1.8s cubic-bezier(0.25, 0.8, 0.25, 1) forwards !important;
+      will-change: transform;
+    }
+  }
+}

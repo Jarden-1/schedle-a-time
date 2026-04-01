@@ -1,0 +1,42 @@
+.skeleton-container {
+  padding: 16px;
+  
+  .skeleton-title {
+    margin-bottom: 16px;
+  }
+  
+  .skeleton-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 16px;
+    
+    .skeleton-avatar {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: #f0f0f0;
+      margin-right: 12px;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+    
+    .skeleton-content {
+      flex: 1;
+      
+      .skeleton-line {
+        height: 16px;
+        background: #f0f0f0;
+        border-radius: 4px;
+        animation: pulse 1.5s ease-in-out infinite;
+      }
+    }
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}

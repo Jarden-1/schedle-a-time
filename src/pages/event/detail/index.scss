@@ -1,0 +1,347 @@
+.detail-page {
+  min-height: 100vh;
+  background: #f5f5f5;
+  padding: 16px;
+  padding-bottom: 32px;
+  
+  .loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 200px;
+    color: #999;
+  }
+  
+  .event-card {
+    background: #fff;
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 16px;
+    
+    .event-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 12px;
+      
+      .event-title {
+        font-size: 20px;
+        font-weight: 700;
+        color: #333;
+        flex: 1;
+        margin-right: 12px;
+      }
+      
+      .status-badge {
+        padding: 4px 10px;
+        border-radius: 12px;
+        font-size: 12px;
+        
+        &.active {
+          background: rgba(7, 193, 96, 0.1);
+          color: #07c160;
+        }
+        
+        &.confirmed {
+          background: rgba(24, 144, 255, 0.1);
+          color: #1890ff;
+        }
+        &.closed {
+          background: #f5f5f5;
+          color: #999;
+        }
+      }
+    }
+    
+    .event-description {
+      padding: 12px;
+      background: #f8f8f8;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      
+      text {
+        font-size: 14px;
+        color: #666;
+        line-height: 1.6;
+      }
+    }
+    
+    .event-info {
+      .info-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 0; /* 🚨 稍微拉大行高 */
+        border-bottom: 1px solid #f0f0f0;
+        min-height: 44px; /* 🚨 确保行高足够容纳按钮 */
+
+        &:last-of-type { border-bottom: none; }
+
+        .info-label {
+          font-size: 14px;
+          color: #666;
+          flex-shrink: 0; /* 🚨 防止标签被挤压 */
+        }
+
+        /* 🚨 核心修复：确保这个容器能够占据右侧空间并对齐内容 */
+        .value-with-action {
+          display: flex;
+          align-items: center;
+          justify-content: flex-end;
+          gap: 10px;
+          flex: 1;
+          min-width: 0;
+          text-align: right;
+
+          .info-value {
+            font-size: 14px;
+            color: #333;
+            font-weight: 500;
+            white-space: nowrap;
+
+            /* 新增以下属性保护按钮布局 */
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            text-align: right;
+          }
+
+          .edit-icon-text {
+            font-size: 12px !important;
+            color: #07c160 !important;
+            background: rgba(7, 193, 96, 0.1) !important;
+            padding: 4px 10px !important; /* 🚨 加大内边距，让它像个按钮 */
+            border-radius: 12px !important;
+            font-weight: 600 !important;
+            flex-shrink: 0 !important;
+            display: inline-block !important;
+            border: 1px solid rgba(7, 193, 96, 0.2) !important;
+
+            &:active { background: rgba(7, 193, 96, 0.2) !important; }
+          }
+        }
+      }
+
+      /* 编辑状态下的容器样式 */
+      .edit-inline-container {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        background: #f9f9f9;
+        padding: 6px;
+        border-radius: 8px;
+        gap: 4px;
+        flex: 1;
+        margin-left: 10px;
+
+        .edit-picker-value {
+          font-size: 12px;
+          color: #333;
+          font-weight: 600;
+          background: #fff;
+          padding: 4px 6px;
+          border-radius: 4px;
+          border: 1px solid #e8e8e8;
+        }
+        /* ... 其余 edit 相关样式保持不变 ... */
+
+        .edit-separator { font-size: 11px; color: #999; }
+
+        .edit-actions {
+          display: flex;
+          gap: 6px;
+          margin-left: 4px;
+
+          .edit-btn {
+            font-size: 11px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: 500;
+            &.cancel { color: #666; background: #e5e5e5; }
+            &.save { color: #fff; background: #07c160; }
+            &:active { opacity: 0.8; }
+          }
+        }
+      }
+
+      /* 🚨 优化后的参与者入口卡片样式 */
+      .participants-summary {
+        width: 100%;
+        margin-top: 12px;
+        padding: 14px 16px;
+        border-radius: 12px;
+        background: #f8f8f8;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        box-sizing: border-box; /* 防止 padding 撑破容器 */
+
+        &:active {
+          background: #f1f2f3;
+        }
+
+        .participants-summary-left {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          white-space: nowrap;
+
+          .participants-summary-icon {
+            font-size: 16px;
+            line-height: 1;
+          }
+
+          .participants-summary-title {
+            font-size: 15px;
+            color: #333;
+            font-weight: 600;
+            line-height: 1; /* 消除默认行高导致的位置偏移 */
+          }
+        }
+
+        .participants-summary-right {
+          display: flex;
+          align-items: baseline; /* 关键：让不同大小的文字按底部基线对齐 */
+          gap: 8px;
+          white-space: nowrap;
+
+          .participants-summary-count {
+            font-size: 14px;
+            color: #333;
+            font-weight: 600;
+            line-height: 1;
+          }
+
+          .participants-summary-hint {
+            font-size: 13px;
+            color: #999;
+            line-height: 1;
+          }
+        }
+      }
+    }
+  }
+
+  .my-status-card, .creator-actions, .confirmed-card {
+    background: #fff;
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 16px;
+
+    .card-title {
+      display: block;
+      font-size: 16px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 16px;
+    }
+
+    .status-content {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+
+      .status-text {
+        font-size: 15px;
+        color: #666;
+
+        &.success { color: #07c160; }
+      }
+    }
+  }
+
+  .creator-actions {
+    .decision-btn { margin-bottom: 12px; }
+    .share-btn {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .share-icon {
+      width: 18px;
+      height: 18px;
+      margin-right: 8px;
+    }
+  }
+  
+  .confirmed-card {
+    background: linear-gradient(135deg, #07c160 0%, #05a350 100%);
+
+    .card-title { color: #fff; }
+
+    /* 🚨 新增：支持多行的列表容器 */
+    .confirmed-time-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px; /* 多行时间之间的呼吸感间距 */
+      margin-bottom: 20px;
+    }
+
+    .confirmed-time-row {
+      display: flex;
+      align-items: center; /* 让日期和时间在同一行对齐 */
+      gap: 12px;
+      background: rgba(7, 193, 96, 0.05); /* 微弱的绿底衬托 */
+      padding: 10px 14px;
+      border-radius: 8px;
+      border-left: 3px solid #07c160; /* 强调左边线 */
+
+      .date {
+        font-size: 15px;
+        font-weight: 600;
+        color: #fff;
+      }
+      .time {
+        font-size: 14px;
+        color: rgba(255, 255, 255, 0.9);
+        font-weight: 500;
+      }
+    }
+
+    .confirmed-time-empty {
+      padding: 16px 0;
+      text-align: center;
+      color: rgba(255, 255, 255, 0.8);
+      font-size: 13px;
+    }
+
+    .revoke-btn {
+      margin-top: 20px;
+      background: rgba(255, 255, 255, 0.2);
+      color: #fff;
+      font-size: 14px;
+      border: none;
+      border-radius: 8px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      &::after {
+        border: none;
+      }
+
+      &:active {
+        background: rgba(255, 255, 255, 0.3);
+      }
+    }
+  }
+  
+  .share-section {
+    margin-top: 24px;
+    .share-btn {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .share-icon {
+      width: 18px;
+      height: 18px;
+      margin-right: 8px;
+    }
+  }
+}

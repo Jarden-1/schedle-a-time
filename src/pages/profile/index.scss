@@ -1,0 +1,303 @@
+.profile-page {
+  min-height: 100vh;
+  background: #f5f5f5;
+  padding: 16px;
+  padding-bottom: calc(16px + 56px + env(safe-area-inset-bottom));
+
+  .native-feedback-btn {
+    background-color: transparent;
+    padding: 0;
+    margin: 0;
+    line-height: inherit;
+    font-size: inherit;
+    color: inherit;
+    text-align: left;
+
+    &::after {
+      display: none;
+      border: none;
+    }
+  }
+
+  .menu-list {
+    margin-bottom: 16px;
+
+    .menu-item {
+      background: #fff;
+      border-radius: 16px;
+      padding: 18px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-sizing: border-box;
+    }
+
+    .menu-text {
+      font-size: 15px;
+      color: #333;
+    }
+
+    .menu-arrow {
+      font-size: 14px;
+      color: #ccc;
+    }
+  }
+
+  .user-card {
+    background: #fff;
+    border-radius: 16px;
+    padding: 24px;
+    display: flex;
+    align-items: center;
+    margin-bottom: 16px;
+
+    .avatar {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background: #f0f0f0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-right: 16px;
+      overflow: hidden;
+
+      .avatar-img {
+        width: 100%;
+        height: 100%;
+        border-radius: 50%;
+      }
+
+      text {
+        font-size: 32px;
+      }
+    }
+
+    .user-info {
+      flex: 1;
+      min-width: 0;
+
+      .nickname {
+        display: block;
+        font-size: 18px;
+        font-weight: 600;
+        color: #333;
+        margin-bottom: 6px;
+      }
+
+      .user-id {
+        display: block;
+        font-size: 13px;
+        color: #999;
+      }
+    }
+  }
+
+  .nickname-modal-mask {
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 999;
+    padding: 24px;
+    box-sizing: border-box;
+  }
+
+  .nickname-modal {
+    width: 100%;
+    max-width: 520px;
+    background: #fff;
+    border-radius: 16px;
+    padding: 18px;
+    box-sizing: border-box;
+  }
+
+  .nickname-modal-title {
+    display: block;
+    font-size: 16px;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 10px;
+  }
+
+  .nickname-modal-desc {
+    display: block;
+    font-size: 12px;
+    color: #999;
+    line-height: 18px;
+    margin-bottom: 12px;
+  }
+
+  /* 🚨 1. 彻底扒掉微信原生 Button 的默认样式，让它居中排布 */
+  .nickname-modal-avatar-btn {
+    background-color: transparent;
+    padding: 0;
+    margin: 20px auto 24px; /* 上下留白呼吸感，左右居中 */
+    line-height: normal;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: fit-content; /* 收缩到内容宽度 */
+    overflow: visible;
+
+    &::after {
+      display: none; /* 暴力干掉原生 Button 的边框 */
+      border: none;
+    }
+
+    /* 🚨 2. 约束头像尺寸为 80x80 完美圆形 */
+    .nickname-modal-avatar {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: #f5f5f5;
+      overflow: hidden;
+      margin-bottom: 10px; /* 和下方提示文字拉开距离 */
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06); /* 增加微微的高级质感 */
+
+      .nickname-modal-avatar-img {
+        width: 100%;
+        height: 100%;
+        display: block;
+        object-fit: cover;
+      }
+    }
+
+    /* 🚨 3. 弱化修改头像提示文字 */
+    .nickname-modal-avatar-text {
+      font-size: 12px;
+      color: #999;
+      font-weight: 400;
+    }
+  }
+
+  /* 顺手微调一下输入框，让它看起来更精致 */
+  .nickname-modal-input {
+    width: 100%;
+    height: 48px;
+    line-height: 48px;
+    border: 1px solid #f0f0f0;
+    background: #fafafa; /* 微微的灰底凸显输入区域 */
+    border-radius: 10px;
+    padding: 0 16px;
+    font-size: 15px;
+    box-sizing: border-box;
+    text-align: center; /* 昵称输入通常居中更有仪式感 */
+  }
+
+  .nickname-modal-actions {
+    margin-top: 14px;
+    display: flex;
+    gap: 12px;
+  }
+
+  .nickname-modal-cancel {
+    flex: 1;
+    height: 44px;
+    line-height: 44px;
+    background: #fff;
+    color: #333;
+    border: 1px solid #ddd;
+    border-radius: 10px;
+    font-size: 15px;
+  }
+
+  .nickname-modal-confirm {
+    flex: 2;
+    height: 44px;
+    line-height: 44px;
+    background: #07c160;
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    font-size: 15px;
+  }
+
+  .stats-card {
+    background: #fff;
+    border-radius: 16px;
+    padding: 20px;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    margin-bottom: 16px;
+
+    .stat-item {
+      text-align: center;
+      flex: 1;
+
+      .stat-number {
+        display: block;
+        font-size: 28px;
+        font-weight: 700;
+        color: #07c160;
+        margin-bottom: 4px;
+      }
+
+      .stat-label {
+        display: block;
+        font-size: 13px;
+        color: #666;
+      }
+    }
+
+    .stat-divider {
+      width: 1px;
+      height: 40px;
+      background: #e5e5e5;
+    }
+  }
+
+  .danger-zone {
+    margin-top: 32px;
+
+    /* 新增：绿色的登录主按钮 */
+    .login-btn {
+      width: 100%;
+      height: 48px;
+      line-height: 48px;
+      background: #07c160;
+      color: #fff;
+      font-size: 15px;
+      font-weight: 600;
+      border: none;
+      border-radius: 8px;
+
+      &:active {
+        opacity: 0.9;
+      }
+    }
+
+    /* 保留原有的退出登录红按钮 */
+    .btn-danger {
+      width: 100%;
+      height: 48px;
+      line-height: 48px;
+      background: #fff;
+      color: #ff4d4f;
+      font-size: 15px;
+      border: 1px solid #ff4d4f;
+      border-radius: 8px;
+
+      &:active {
+        background: rgba(255, 77, 79, 0.05);
+      }
+    }
+  }
+
+  .footer {
+    margin-top: 32px;
+    text-align: center;
+
+    .version {
+      font-size: 12px;
+      color: #ccc;
+    }
+  }
+}

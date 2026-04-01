@@ -1,0 +1,286 @@
+.select-page {
+  min-height: 100vh;
+  background: #f5f5f5;
+  display: flex;
+  flex-direction: column;
+
+  .error-state {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 20px;
+
+    .error-text {
+      font-size: 16px;
+      color: #666;
+      margin-bottom: 16px;
+    }
+
+    .retry-btn {
+      padding: 12px 32px;
+      background: #07c160;
+      color: #fff;
+      border-radius: 24px;
+      font-size: 15px;
+      border: none;
+    }
+  }
+
+  .header {
+    background: #fff;
+    padding: 20px;
+    border-bottom: 1px solid #eee;
+
+    .title {
+      display: block;
+      font-size: 20px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 8px;
+    }
+
+    .subtitle {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .event-title-highlight {
+      font-size: 16px;
+      font-weight: 700;
+      color: #333;
+      line-height: 22px;
+    }
+
+    .action-hint {
+      margin-top: 8px;
+      padding: 8px 12px;
+      background: #f4f4f5; /* 浅灰色背景底 */
+      color: #909399;
+      border-radius: 8px;
+      font-size: 13px;
+      line-height: 1.4;
+      display: inline-flex;
+      align-items: center;
+      transition: all 0.3s ease;
+
+      &--active {
+        background: rgba(7, 193, 96, 0.1); /* 微信绿透明底 */
+        color: #07c160;
+        font-weight: 600;
+        box-shadow: 0 2px 8px rgba(7, 193, 96, 0.15); /* 加点呼吸感的光晕 */
+      }
+    }
+  }
+
+  .time-grid-container {
+    flex: 1;
+    padding: 16px;
+    overflow-y: auto;
+    width: 100%;
+    box-sizing: border-box; /* 🚨 核心防御：防止 padding 撑爆屏幕 */
+
+    &--matrix {
+      overflow-y: auto;
+      padding: 12px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    .date-section {
+      margin-bottom: 24px;
+      width: 100%;
+      box-sizing: border-box;
+
+      .date-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+
+        .date-text { font-size: 16px; font-weight: 600; color: #333; }
+        .select-all-btn { font-size: 13px; color: #07c160; padding: 4px 12px; background: rgba(7, 193, 96, 0.1); border-radius: 4px; }
+      }
+
+      .slots-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr); /* 🚨 强制 3 列等分，拒绝溢出 */
+        gap: 12px;
+        width: 100%;
+        box-sizing: border-box;
+
+        .slot-item {
+          padding: 14px 0;
+          background: #fff;
+          border: 2px solid #e5e5e5;
+          border-radius: 8px;
+          text-align: center;
+          display: flex; align-items: center; justify-content: center;
+          transition: all 0.2s ease;
+          width: 100%;
+          box-sizing: border-box;
+
+          &.selected { background: #07c160; border-color: #07c160; .slot-text { color: #fff; font-weight: 600; } }
+          &:active { opacity: 0.8; transform: scale(0.98); }
+          .slot-text { font-size: 14px; color: #666; }
+        }
+      }
+    }
+  }
+
+  .footer {
+    background: #fff;
+    padding: 16px 20px 32px;
+    border-top: 1px solid #eee;
+
+    .operation-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+
+      .legend {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+
+        .legend-item {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+
+          .legend-box {
+            width: 14px;
+            height: 14px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+
+            &--empty {
+              background: #fff;
+            }
+
+            &--selected {
+              background: rgba(7, 193, 96, 0.85);
+              border-color: rgba(7, 193, 96, 0.85);
+            }
+          }
+
+          .legend-text {
+            font-size: 12px;
+            color: #666;
+          }
+        }
+      }
+
+      .pill-buttons {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+
+        .pill-btn {
+          padding: 8px 14px;
+          font-size: 13px;
+          color: #333;
+          background: #f2f2f2;
+          border-radius: 999px;
+
+          &:active {
+            opacity: 0.85;
+          }
+
+          &--active {
+            background: #07c160;
+            color: #fff;
+            font-weight: 600;
+            box-shadow: 0 2px 6px rgba(7, 193, 96, 0.3);
+          }
+        }
+      }
+    }
+
+    .action-buttons {
+      display: flex;
+      gap: 12px;
+
+      button {
+        flex: 1;
+        height: 48px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 16px;
+        border-radius: 8px;
+        border: none;
+
+        &:first-child {
+          background: #f2f2f2;
+          color: #666;
+        }
+
+        &:last-child {
+          background: #07c160;
+          color: #fff;
+          font-weight: 600;
+        }
+      }
+    }
+  }
+}
+
+/* --- 新手引导弹窗样式 --- */
+.guide-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.75);
+  z-index: 9999;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  backdrop-filter: blur(4px);
+
+  .guide-modal-content {
+    background: #fff;
+    border-radius: 16px;
+    padding: 24px;
+    width: 75%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+    animation: popIn 0.3s ease-out forwards;
+
+    .guide-title {
+      font-size: 18px;
+      font-weight: bold;
+      color: #333;
+      margin-bottom: 16px;
+    }
+
+    .guide-gif {
+      width: 100%;
+      height: 200px;
+      border-radius: 8px;
+      background-color: #f5f5f5;
+      margin-bottom: 16px;
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,0.05);
+    }
+
+    .guide-desc {
+      font-size: 14px;
+      color: #666;
+      text-align: center;
+      line-height: 1.6;
+      margin-bottom: 16px;
+    }
+  }
+}
+
+@keyframes popIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
