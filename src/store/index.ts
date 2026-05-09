@@ -12,33 +12,83 @@ export const BASE_URL = 'https://api.zhanghaoyang.cn/api';
 // 与 BASE_URL 同源的上传地址（收口配置，避免散落硬编码）
 export const UPLOAD_URL = `${BASE_URL}/upload`;
 
-// 封装原生的 Taro.request，替代旧的 callCloudFunction
-const requestAPI = async (endpoint: string, method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET', data: any = {}) => {
-  try {
-    const token = Taro.getStorageSync('token') || '';
-    const res = await Taro.request({
-      url: `${BASE_URL}${endpoint}`,
-      method,
-      data,
-      header: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
+type ApiMethod = 'GET' | 'POST' | 'PUT' | 'DELETE';
+
+let authRefreshPromise: Promise<User | null> | null = null;
+
+const requestRawAPI = async (endpoint: string, method: ApiMethod = 'GET', data: any = {}) => {
+  const token = Taro.getStorageSync('token') || '';
+  const res = await Taro.request({
+    url: `${BASE_URL}${endpoint}`,
+    method,
+    data,
+    header: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    }
+  });
+
+  if (res.statusCode < 200 || res.statusCode >= 300) {
+    const errorMsg = (res.data as any)?.error || `请求失败 (${res.statusCode})`;
+    const apiError = new Error(errorMsg);
+    (apiError as any).statusCode = res.statusCode;
+    throw apiError;
+  }
+  return res.data; // 返回 { success, data, error } 格式
+};
+
+const refreshAuthSession = async (): Promise<User | null> => {
+  if (process.env.TARO_ENV !== 'weapp') return null;
+
+  if (!authRefreshPromise) {
+    authRefreshPromise = (async () => {
+      const { code } = await Taro.login();
+      if (!code) throw new Error('获取微信登录凭证失败');
+
+      const result = await requestRawAPI('/login', 'POST', { code });
+      if (!result?.success || !result?.data?.openid || !result?.data?.token) {
+        throw new Error('登录态刷新失败');
       }
+
+      const { openid, token } = result.data;
+      Taro.setStorageSync('token', token);
+
+      const existingUser = Taro.getStorageSync('currentUser') || {};
+      const avatarUrl = existingUser.avatarUrl || existingUser.avatarFileId || '';
+      const user = {
+        ...existingUser,
+        id: openid,
+        openid,
+        avatarUrl,
+        avatarFileId: existingUser.avatarFileId || avatarUrl
+      } as User;
+      Taro.setStorageSync('currentUser', user);
+      return user;
+    })().finally(() => {
+      authRefreshPromise = null;
     });
-    if (res.statusCode === 401) {
+  }
+
+  return authRefreshPromise;
+};
+
+// 封装原生的 Taro.request，替代旧的 callCloudFunction
+const requestAPI = async (endpoint: string, method: ApiMethod = 'GET', data: any = {}) => {
+  try {
+    return await requestRawAPI(endpoint, method, data);
+  } catch (error: any) {
+    if (error?.statusCode === 401 && endpoint !== '/login') {
       Taro.removeStorageSync('token');
-      const authError = new Error('登录已过期，请重新登录');
-      (authError as any).statusCode = 401;
-      throw authError;
+      try {
+        const refreshedUser = await refreshAuthSession();
+        if (refreshedUser?.openid && Taro.getStorageSync('token')) {
+          return await requestRawAPI(endpoint, method, data);
+        }
+      } catch (refreshError) {
+        console.error('Refresh auth session error:', refreshError);
+      }
     }
-    if (res.statusCode < 200 || res.statusCode >= 300) {
-      const errorMsg = (res.data as any)?.error || `请求失败 (${res.statusCode})`;
-      const apiError = new Error(errorMsg);
-      (apiError as any).statusCode = res.statusCode;
-      throw apiError;
-    }
-    return res.data; // 返回 { success, data, error } 格式
-  } catch (error) {
+
     console.error(`Request ${endpoint} error:`, error);
     throw error;
   }
@@ -48,6 +98,14 @@ interface Slot {
   date: string;
   startTime: string;
   endTime: string;
+}
+
+export type EventLoadErrorType = 'auth' | 'not_found' | 'network' | 'server' | 'unknown';
+
+export interface EventLoadError {
+  type: EventLoadErrorType;
+  statusCode?: number;
+  message: string;
 }
 
 interface AppState {
@@ -64,6 +122,7 @@ interface AppState {
   setUserNickName: (name: string) => void;
   fetchEvents: () => Promise<void>;
   getEventById: (eventId: string) => Promise<Event | null>;
+  eventLoadError: EventLoadError | null;
   createEventAPI: (form: CreateEventForm) => Promise<Event | null | 'NEED_LOGIN'>;
   updateEventAPI: (eventId: string, updates: Partial<Event>) => Promise<boolean>;
   deleteEventAPI: (eventId: string) => Promise<boolean>;
@@ -100,6 +159,23 @@ const normalizeUser = (user: any): User | null => {
     avatarUrl: finalAvatarUrl,
     avatarFileId: avatarFileId || finalAvatarUrl
   } as User;
+};
+
+const normalizeEventLoadError = (error: any): EventLoadError => {
+  const statusCode = error?.statusCode;
+  if (statusCode === 401) {
+    return { type: 'auth', statusCode, message: '请先登录后参与这个活动' };
+  }
+  if (statusCode === 404) {
+    return { type: 'not_found', statusCode, message: '活动不存在或已删除' };
+  }
+  if (typeof statusCode === 'number' && statusCode >= 500) {
+    return { type: 'server', statusCode, message: '服务器暂时不可用，请稍后重试' };
+  }
+  if (error?.errMsg || error?.message?.includes('request')) {
+    return { type: 'network', message: '网络连接失败，请检查网络后重试' };
+  }
+  return { type: 'unknown', statusCode, message: error?.message || '活动加载失败，请重试' };
 };
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -178,6 +254,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   loading: false,
   error: null,
+  eventLoadError: null,
 
   // 🚨 核心改造 2：全量请求自己的接口
   fetchEvents: async () => {
@@ -417,7 +494,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   getEventById: async (eventId: string) => {
-    set({ loading: true });
+    set({ loading: true, eventLoadError: null });
     try {
       const result = await requestAPI(`/events/${eventId}`, 'GET');
 
@@ -428,7 +505,8 @@ export const useAppStore = create<AppState>((set, get) => ({
             ? state.events.map(e => e.id === eventId ? eventData : e)
             : [...state.events, eventData],
           currentEvent: eventData,
-          loading: false
+          loading: false,
+          eventLoadError: null
         }));
         return eventData;
       }
@@ -439,13 +517,23 @@ export const useAppStore = create<AppState>((set, get) => ({
         set({ currentEvent: localEvent, loading: false });
         return localEvent;
       }
-      set({ loading: false });
+      set({
+        loading: false,
+        eventLoadError: { type: 'not_found', message: '活动不存在或已删除' }
+      });
       return null;
     } catch (error) {
       console.error('Get event error:', error);
+      const loadError = normalizeEventLoadError(error);
+
+      if (loadError.type === 'auth' || loadError.type === 'not_found') {
+        set({ currentEvent: null, loading: false, eventLoadError: loadError });
+        return null;
+      }
+
       const { events } = get();
       const localEvent = events.find(e => e.id === eventId);
-      set({ currentEvent: localEvent || null, loading: false });
+      set({ currentEvent: localEvent || null, loading: false, eventLoadError: localEvent ? null : loadError });
       return localEvent || null;
     }
   }

@@ -105,6 +105,7 @@ export default function EventDetail() {
     getEventById,
     updateEventAPI,
     loading: storeLoading,
+    eventLoadError,
     currentUser,
     setCurrentUser,
     setUserNickName
@@ -112,6 +113,7 @@ export default function EventDetail() {
 
   const loadEvent = useCallback(async (id: string) => {
     setEventId(id);
+    setShowLogin(false);
     const cloudEvent = await getEventById(id);
     if (cloudEvent) {
       setEvent(cloudEvent);
@@ -119,14 +121,16 @@ export default function EventDetail() {
       const localEvent = events.find(e => e.id === id);
       if (localEvent) {
         setEvent(localEvent);
-      } else {
-        // 如果找不到事件且用户未登录，显示登录引导
-        if (!currentUser) {
-          setShowLogin(true);
-        }
       }
     }
   }, [events, getEventById, currentUser]);
+
+  useEffect(() => {
+    if (eventLoadError?.type === 'auth') {
+      setEvent(null);
+      setShowLogin(true);
+    }
+  }, [eventLoadError]);
 
   useLoad((options) => {
     const { id } = options;
@@ -288,29 +292,16 @@ export default function EventDetail() {
     );
   }
 
-  if (!event) {
-    return (
-      <View className="detail-page">
-        <EmptyState
-          icon="😕"
-          title="事件不存在或已删除"
-          description="请检查链接是否正确，或返回首页"
-          actionText="返回首页"
-          onAction={() => Taro.switchTab({ url: '/pages/index/index' })}
-        />
-      </View>
-    );
-  }
-
-  if (showLogin && !currentUser) {
+  if ((showLogin || eventLoadError?.type === 'auth') && !event) {
     return (
       <View className="detail-page">
         <View style={{ padding: '16px' } as any}>
           <LoginCard
-            title="请先登录以查看活动详情"
-            submitText="登录"
-            initialNickName={userNickName}
-            onCancel={() => setShowLogin(false)}
+            title="请先登录后参与活动"
+            submitText="登录并继续"
+            initialNickName={userNickName || currentUser?.nickName || ''}
+            initialAvatarUrl={currentUser?.avatarUrl || ''}
+            onCancel={() => Taro.switchTab({ url: '/pages/index/index' })}
             onSuccess={(user) => {
               setCurrentUser({
                 id: user.id,
@@ -321,11 +312,46 @@ export default function EventDetail() {
               });
               setUserNickName(user.nickName || '');
               setShowLogin(false);
-              Taro.showToast({ title: '登录成功，重新加载事件详情', icon: 'success' });
+              Taro.showToast({ title: '登录成功，正在加载活动', icon: 'success' });
               setTimeout(() => loadEvent(eventId), 200);
             }}
           />
         </View>
+      </View>
+    );
+  }
+
+  if (!eventId) {
+    return (
+      <View className="detail-page">
+        <EmptyState
+          icon="🔗"
+          title="邀请链接缺少活动信息"
+          description="请让发起人重新分享活动链接"
+          actionText="返回首页"
+          onAction={() => Taro.switchTab({ url: '/pages/index/index' })}
+        />
+      </View>
+    );
+  }
+
+  if (!event) {
+    const isNetworkError = eventLoadError?.type === 'network' || eventLoadError?.type === 'server' || eventLoadError?.type === 'unknown';
+    return (
+      <View className="detail-page">
+        <EmptyState
+          icon={isNetworkError ? '📶' : '😕'}
+          title={isNetworkError ? eventLoadError?.message || '活动加载失败' : '活动不存在或已删除'}
+          description={isNetworkError ? '请检查网络后重试，或稍后再打开邀请链接' : '请检查链接是否正确，或联系发起人确认活动状态'}
+          actionText={isNetworkError ? '重新加载' : '返回首页'}
+          onAction={() => {
+            if (isNetworkError && eventId) {
+              loadEvent(eventId);
+            } else {
+              Taro.switchTab({ url: '/pages/index/index' });
+            }
+          }}
+        />
       </View>
     );
   }

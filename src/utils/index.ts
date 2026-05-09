@@ -257,6 +257,28 @@ const formatDuration = (mins: number) => {
   return `${(mins / 60).toFixed(1).replace('.0', '')}小时`;
 };
 
+const getWindowSortKey = (window: any) => window.slotKeys?.[0] || `${window.date || window.startDate || ''}_${window.startTime || ''}`;
+
+const getUnavailableCount = (window: any) => Math.max((window.totalCount || 0) - (window.availableCount || 0), 0);
+
+const compareRecommendationWindows = (a: any, b: any) => (
+  (b.vipCount || 0) - (a.vipCount || 0) ||
+  (b.availableCount || 0) - (a.availableCount || 0) ||
+  getUnavailableCount(a) - getUnavailableCount(b) ||
+  (b.matchRate || 0) - (a.matchRate || 0) ||
+  getWindowSortKey(a).localeCompare(getWindowSortKey(b))
+);
+
+const resolveRecommendationReason = (
+  window: any,
+  options: { hasVips: boolean; vipTotal: number; maxAvailable: number; earliestQualifiedKey?: string }
+) => {
+  if (options.hasVips && window.vipCount >= options.vipTotal) return '👑 核心齐聚';
+  if (window.availableCount === options.maxAvailable) return '👥 人气最旺';
+  if (options.earliestQualifiedKey && getWindowSortKey(window) === options.earliestQualifiedKey) return '🚀 最早成行';
+  return '⚖️ 优质备选';
+};
+
 export const findBestSlidingWindows = (
   candidateSlots: any[],
   targetDurationMinutes: number,
@@ -335,6 +357,11 @@ export const findBestSlidingWindows = (
     : undefined;
 
   const top5: any[] = [];
+  const maxAvailable = Math.max(...allWindows.map(w => w.availableCount), 0);
+  const earliestQualifiedWindow = [...allWindows]
+    .filter(w => w.matchRate >= 0.5)
+    .sort((a, b) => getWindowSortKey(a).localeCompare(getWindowSortKey(b)))[0];
+  const earliestQualifiedKey = earliestQualifiedWindow ? getWindowSortKey(earliestQualifiedWindow) : undefined;
 
   // 🚨 核心特性 2：同质化去重判定
   const isTooSimilar = (newWin: any) => {
@@ -351,34 +378,26 @@ export const findBestSlidingWindows = (
     });
   };
 
-  const tryAddWindow = (window: any, reason: string) => {
+  const tryAddWindow = (window: any) => {
     if (top5.length >= 5) return;
     if (!isTooSimilar(window)) {
-      window.recommendReason = reason;
-      window.downgradeHint = downgradeHint;
-      top5.push(window);
+      top5.push({
+        ...window,
+        recommendReason: resolveRecommendationReason(window, {
+          hasVips: vipNickNames.length > 0,
+          vipTotal: vipNickNames.length,
+          maxAvailable,
+          earliestQualifiedKey
+        }),
+        downgradeHint
+      });
     }
   };
 
-  // 1. 👑 核心齐聚 (VIP最高优先)
-  if (vipIds && vipIds.length > 0) {
-    const vipSorted = [...allWindows].sort((a, b) => b.vipCount - a.vipCount || b.availableCount - a.availableCount);
-    if (vipSorted.length > 0 && vipSorted[0].vipCount > 0) tryAddWindow(vipSorted[0], '👑 核心齐聚');
-  }
-
-  // 2. 👥 人气最旺
-  const popSorted = [...allWindows].sort((a, b) => b.availableCount - a.availableCount || b.vipCount - a.vipCount);
-  if (popSorted.length > 0) tryAddWindow(popSorted[0], '👥 人气最旺');
-
-  // 3. 🚀 最早成行 (及格线：匹配率 >= 50%)
-  const earlySorted = [...allWindows].filter(w => w.matchRate >= 0.5).sort((a, b) => a.slotKeys[0].localeCompare(b.slotKeys[0]));
-  if (earlySorted.length > 0) tryAddWindow(earlySorted[0], '🚀 最早成行');
-
-  // 4 & 5. ⚖️ 综合最佳
-  const scoreSorted = [...allWindows].sort((a, b) => b.score - a.score);
-  for (const w of scoreSorted) {
+  const rankedWindows = [...allWindows].sort(compareRecommendationWindows);
+  for (const w of rankedWindows) {
     if (top5.length >= 5) break;
-    tryAddWindow(w, '⚖️ 优质备选');
+    tryAddWindow(w);
   }
 
   return top5;
@@ -449,6 +468,7 @@ export const findBestDateWindows = (
 
   const downgradeHint = isDowngraded ? `未找到连续${targetDays}天的最佳组合，已降级推荐连续${currentDays}天` : undefined;
   const top3: any[] = [];
+  const maxAvailable = Math.max(...allWindows.map(w => w.availableCount), 0);
 
   const isTooSimilar = (newWin: any) => top3.some(existing =>
     existing.slotKeys.some((k: string) => newWin.slotKeys.includes(k)) &&
@@ -456,27 +476,25 @@ export const findBestDateWindows = (
     existing.availableUsers.every((u: string) => newWin.availableUsers.includes(u))
   );
 
-  const tryAdd = (win: any, reason: string) => {
+  const tryAdd = (win: any) => {
     if (top3.length >= 3) return;
     if (!isTooSimilar(win)) {
-      win.recommendReason = reason;
-      win.downgradeHint = downgradeHint;
-      top3.push(win);
+      top3.push({
+        ...win,
+        recommendReason: resolveRecommendationReason(win, {
+          hasVips: vipNickNames.length > 0,
+          vipTotal: vipNickNames.length,
+          maxAvailable
+        }),
+        downgradeHint
+      });
     }
   };
 
-  if (vipIds && vipIds.length > 0) {
-    const vipSorted = [...allWindows].sort((a, b) => b.vipCount - a.vipCount || b.availableCount - a.availableCount);
-    if (vipSorted.length > 0 && vipSorted[0].vipCount > 0) tryAdd(vipSorted[0], '👑 核心齐聚');
-  }
-
-  const popSorted = [...allWindows].sort((a, b) => b.availableCount - a.availableCount || b.vipCount - a.vipCount);
-  if (popSorted.length > 0) tryAdd(popSorted[0], '👥 人气最旺');
-
-  const scoreSorted = [...allWindows].sort((a, b) => b.score - a.score);
-  for (const w of scoreSorted) {
+  const rankedWindows = [...allWindows].sort(compareRecommendationWindows);
+  for (const w of rankedWindows) {
     if (top3.length >= 3) break;
-    tryAdd(w, '⚖️ 优质备选');
+    tryAdd(w);
   }
 
   return top3;

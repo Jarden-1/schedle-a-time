@@ -321,7 +321,7 @@ app.post('/api/login', async (req, res) => {
       return res.status(status).json({ success: false, error: message });
     }
 
-    const token = jwt.sign({ openid }, process.env.JWT_SECRET, { expiresIn: '7d' });
+    const token = jwt.sign({ openid }, process.env.JWT_SECRET, { expiresIn: '30d' });
     res.json({ success: true, data: { openid, token } });
   } catch (error) {
     console.error('微信登录失败:', error.response?.data || error.message);

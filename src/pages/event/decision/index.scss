@@ -1306,6 +1306,30 @@
     gap: 4px;
   }
 
+  .filter-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .filter-value {
+    flex-shrink: 0;
+    min-width: 72px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: #f3f4f6;
+    color: #8a8a8a;
+    font-size: 12px;
+    font-weight: 600;
+    text-align: center;
+
+    &.active {
+      background: rgba(7, 193, 96, 0.1);
+      color: #07c160;
+    }
+  }
+
   .filter-desc {
     display: block;
     font-size: 12px;
@@ -1313,50 +1337,40 @@
     line-height: 1.5;
   }
 
-  .duration-options {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
+  .duration-slider-wrap {
+    padding-top: 4px;
   }
 
-  .duration-chip {
-    min-width: 78px;
-    min-height: 36px;
-    padding: 8px 12px;
-    border: 1px solid #e5e7eb;
-    border-radius: 8px;
-    background: #f8faf9;
-    color: #333;
-    font-size: 13px;
-    box-sizing: border-box;
+  .duration-slider {
+    margin: 0;
+  }
+
+  .slider-ticks {
     display: flex;
     align-items: center;
-    justify-content: center;
-    gap: 6px;
-    position: relative;
-    transition: all 0.18s ease;
-
-    &.active {
-      color: #07c160;
-      background: rgba(7, 193, 96, 0.08);
-      border-color: rgba(7, 193, 96, 0.65);
-      font-weight: 600;
-      box-shadow: 0 4px 12px rgba(7, 193, 96, 0.12);
-    }
-
-    &:active {
-      transform: scale(0.97);
-    }
+    justify-content: space-between;
+    padding: 0 9px;
+    margin-top: -8px;
+    pointer-events: none;
   }
 
-  .chip-badge {
-    font-size: 10px;
-    line-height: 1;
-    padding: 3px 5px;
-    border-radius: 6px;
-    color: #d46b08;
-    background: #fff3d8;
-    font-weight: 600;
+  .slider-tick {
+    width: 2px;
+    height: 5px;
+    border-radius: 999px;
+    background: #d1d5db;
+  }
+
+  .slider-scale {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 4px;
+
+    text {
+      font-size: 11px;
+      color: #9ca3af;
+    }
   }
 
   .top3-section {

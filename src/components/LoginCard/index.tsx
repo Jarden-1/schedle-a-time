@@ -29,7 +29,7 @@ export default function LoginCard({
   const { loginWithWeChat, updateUserProfileAPI, UPLOAD_URL } = useAppStore();
 
   const [nickName, setNickName] = useState(initialNickName);
-  const [avatarFileId, setAvatarFileId] = useState<string>('');
+  const [avatarFileId, setAvatarFileId] = useState<string>(initialAvatarUrl);
   const [avatarPreview, setAvatarPreview] = useState<string>(initialAvatarUrl);
   const [saving, setSaving] = useState(false);
 

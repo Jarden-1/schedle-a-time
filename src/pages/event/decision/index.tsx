@@ -1,5 +1,5 @@
 import Taro, { useLoad } from '@tarojs/taro';
-import { View, Text, Button, ScrollView, Image } from '@tarojs/components';
+import { View, Text, Button, ScrollView, Image, Slider } from '@tarojs/components';
 import { useState, useMemo } from 'react';
 import { Event, CandidateSlot, TimeMode } from '@/types';
 import { useAppStore } from '@/store';
@@ -7,12 +7,6 @@ import { formatDate, formatTime, parseSlotKey, findBestSlidingWindows, findBestD
 import TimeGridSelector from '@/components/TimeGridSelector';
 import Loading from '@/components/Loading';
 import './index.scss';
-
-type FilterOption = {
-  label: string;
-  value: number;
-  recommended?: boolean;
-};
 
 export default function DecisionPanel() {
   const [event, setEvent] = useState<Event | null>(null);
@@ -39,23 +33,16 @@ export default function DecisionPanel() {
 
   // 在组件顶部增加
   const [targetDays, setTargetDays] = useState<number | null>(null);
-  const dayOptions: FilterOption[] = [
-    { label: '1天', value: 1 }, { label: '2天', value: 2 }, { label: '3天', value: 3 },
-    { label: '4天', value: 4 }, { label: '5天', value: 5 }
-  ];
   const weekNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
   const isDateOnly = event?.timeMode === TimeMode.DATE_ONLY || (event?.timeMode as any) === 'DATE_ONLY';
 
   const { events, confirmTimeAPI, getEventById, currentUser } = useAppStore();
 
-  const durationOptions: FilterOption[] = [
-    { label: '30分钟', value: 30 },
-    { label: '1小时', value: 60, recommended: true },
-    { label: '1.5小时', value: 90 },
-    { label: '2小时', value: 120 },
-    { label: '3小时', value: 180 },
-    { label: '4小时', value: 240 }
-  ];
+  const formatDurationLabel = (minutes: number) => {
+    if (minutes < 60) return `${minutes}分钟`;
+    if (minutes % 60 === 0) return `${minutes / 60}小时`;
+    return `${Math.floor(minutes / 60)}小时${minutes % 60}分钟`;
+  };
 
   useLoad(async (options) => {
     const { id } = options;
@@ -200,6 +187,13 @@ export default function DecisionPanel() {
       slotKeys: allKeys
     };
   }, [event, isDateOnly]);
+
+  const maxTargetDays = Math.max(1, dateLabels.length);
+  const durationSliderTicks = useMemo(() => (
+    isDateOnly
+      ? Array.from({ length: maxTargetDays }, (_, index) => index + 1)
+      : Array.from({ length: 16 }, (_, index) => 30 + index * 30)
+  ), [isDateOnly, maxTargetDays]);
 
   // 2. 构建热力图字典数据（包含匹配率和具体人数）
   const { heatmapData, heatmapCountData } = useMemo(() => {
@@ -346,28 +340,49 @@ export default function DecisionPanel() {
         <>
           <View className="duration-filter">
             <View className="duration-header">
-              <Text className="filter-label">{isDateOnly ? '推荐前先选择预计天数' : '推荐前先选择预计时长'}</Text>
+              <View className="filter-title-row">
+                <Text className="filter-label">{isDateOnly ? '推荐前先选择预计天数' : '推荐前先选择预计时长'}</Text>
+                <Text className={`filter-value ${hasRecommendationTarget ? 'active' : ''}`}>
+                  {isDateOnly
+                    ? (targetDays ? `${targetDays}天` : '拖动选择')
+                    : (targetDuration ? formatDurationLabel(targetDuration) : '拖动选择')}
+                </Text>
+              </View>
               <Text className="filter-desc">
                 {isDateOnly ? '系统会按活动天数推荐人最齐的日期组合' : '系统会按活动时长推荐人最齐的连续时段'}
               </Text>
             </View>
-            <View className="duration-options">
-              {(isDateOnly ? dayOptions : durationOptions).map((option) => {
-                const active = isDateOnly ? targetDays === option.value : targetDuration === option.value;
-                return (
-                  <View
-                    key={option.value}
-                    className={`duration-chip ${active ? 'active' : ''}`}
-                    onClick={() => {
-                      if (isDateOnly) setTargetDays(option.value);
-                      else setTargetDuration(option.value);
-                    }}
-                  >
-                    <Text>{option.label}</Text>
-                    {option.recommended ? <Text className="chip-badge">推荐</Text> : null}
-                  </View>
-                );
-              })}
+            <View className="duration-slider-wrap">
+              <Slider
+                className="duration-slider"
+                min={isDateOnly ? 1 : 30}
+                max={isDateOnly ? maxTargetDays : 480}
+                step={isDateOnly ? 1 : 30}
+                value={isDateOnly ? (targetDays || 1) : (targetDuration || 30)}
+                activeColor="#07c160"
+                backgroundColor="#e5e7eb"
+                blockColor="#07c160"
+                blockSize={18}
+                onChange={(e) => {
+                  const value = Number(e.detail.value);
+                  if (isDateOnly) setTargetDays(value);
+                  else setTargetDuration(value);
+                }}
+                onChanging={(e) => {
+                  const value = Number(e.detail.value);
+                  if (isDateOnly) setTargetDays(value);
+                  else setTargetDuration(value);
+                }}
+              />
+              <View className="slider-ticks">
+                {durationSliderTicks.map((tick) => (
+                  <View key={tick} className="slider-tick" />
+                ))}
+              </View>
+              <View className="slider-scale">
+                <Text>{isDateOnly ? '1天' : '30分钟'}</Text>
+                <Text>{isDateOnly ? `${maxTargetDays}天` : '8小时'}</Text>
+              </View>
             </View>
           </View>
 
