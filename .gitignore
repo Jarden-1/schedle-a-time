@@ -21,5 +21,6 @@ ssh_connect.py
 ssh_connect.ps1
 ssh_auto.sh
 temp_ssh.sh
+scripts/*.local.*
 .claude/
 .serena/
