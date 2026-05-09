@@ -12,7 +12,7 @@ export default defineAppConfig({
   window: {
     backgroundTextStyle: 'light',
     navigationBarBackgroundColor: '#fff',
-    navigationBarTitleText: '约时间助手',
+    navigationBarTitleText: '约时间工具',
     navigationBarTextStyle: 'black'
   },
   tabBar: {

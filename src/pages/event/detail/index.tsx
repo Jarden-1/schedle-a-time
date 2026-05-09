@@ -412,12 +412,19 @@ export default function EventDetail() {
           
           {/* 🚨 优化后的参与情况卡片，不再嵌套在 info-row 内部 */}
           <View className="participants-summary" onClick={handleGoToParticipants}>
-            <View className="participants-summary-left">
-              <Text className="participants-summary-icon">👥</Text>
-              <Text className="participants-summary-title">参与情况</Text>
-            </View>
-            <View className="participants-summary-right">
-              <Text className="participants-summary-count">{submittedCount} 人已填写</Text>
+            <View className="participants-summary-top">
+              <View className="participants-summary-left">
+                <View className="participants-summary-copy">
+                  <Text className="participants-summary-title">成员管理</Text>
+                  <Text className="participants-summary-desc">
+                    {canManage ? '可修改显示名、设置重点嘉宾' : '查看成员填写情况'}
+                  </Text>
+                  <View className="participants-summary-meta">
+                    <Text className="participants-summary-count">{submittedCount} 人已填写</Text>
+                    {canManage ? <Text className="participants-summary-extra">· 可设置重点嘉宾</Text> : null}
+                  </View>
+                </View>
+              </View>
               <Text className="participants-summary-hint">
                 {canManage ? '管理 〉' : '查看 〉'}
               </Text>

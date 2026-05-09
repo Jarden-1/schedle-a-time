@@ -1,12 +1,18 @@
 import Taro, { useLoad } from '@tarojs/taro';
-import { View, Text, Button, Picker, ScrollView, Image } from '@tarojs/components';
+import { View, Text, Button, ScrollView, Image } from '@tarojs/components';
 import { useState, useMemo } from 'react';
 import { Event, CandidateSlot, TimeMode } from '@/types';
 import { useAppStore } from '@/store';
-import { formatDate, formatTime, parseSlotKey, findBestSlidingWindows, findBestDateWindows, generateTimeSlots } from '@/utils';
+import { formatDate, formatTime, parseSlotKey, findBestSlidingWindows, findBestDateWindows, generateTimeSlots, getParticipantDisplayName } from '@/utils';
 import TimeGridSelector from '@/components/TimeGridSelector';
 import Loading from '@/components/Loading';
 import './index.scss';
+
+type FilterOption = {
+  label: string;
+  value: number;
+  recommended?: boolean;
+};
 
 export default function DecisionPanel() {
   const [event, setEvent] = useState<Event | null>(null);
@@ -17,7 +23,7 @@ export default function DecisionPanel() {
 
   const [confirming, setConfirming] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
-  const [targetDuration, setTargetDuration] = useState(60);
+  const [targetDuration, setTargetDuration] = useState<number | null>(null);
 
   const [showDecisionGuide, setShowDecisionGuide] = useState(false);
   const [decisionGuideStep, setDecisionGuideStep] = useState(1);
@@ -32,8 +38,8 @@ export default function DecisionPanel() {
   };
 
   // 在组件顶部增加
-  const [targetDays, setTargetDays] = useState(1);
-  const dayOptions = [
+  const [targetDays, setTargetDays] = useState<number | null>(null);
+  const dayOptions: FilterOption[] = [
     { label: '1天', value: 1 }, { label: '2天', value: 2 }, { label: '3天', value: 3 },
     { label: '4天', value: 4 }, { label: '5天', value: 5 }
   ];
@@ -42,9 +48,9 @@ export default function DecisionPanel() {
 
   const { events, confirmTimeAPI, getEventById, currentUser } = useAppStore();
 
-  const durationOptions = [
+  const durationOptions: FilterOption[] = [
     { label: '30分钟', value: 30 },
-    { label: '1小时', value: 60 },
+    { label: '1小时', value: 60, recommended: true },
     { label: '1.5小时', value: 90 },
     { label: '2小时', value: 120 },
     { label: '3小时', value: 180 },
@@ -82,13 +88,14 @@ export default function DecisionPanel() {
 
     const slotMap = new Map<string, string[]>();
     event.participants.forEach(participant => {
+      const displayName = getParticipantDisplayName(participant);
       participant.availableSlots.forEach(slot => {
         if (!slotMap.has(slot)) slotMap.set(slot, []);
-        slotMap.get(slot)!.push(participant.nickName);
+        slotMap.get(slot)!.push(displayName);
       });
     });
     
-    const allParticipants = event.participants.map(p => p.nickName);
+    const allParticipants = event.participants.map(p => getParticipantDisplayName(p));
     const candidates: CandidateSlot[] = Array.from(slotMap.entries()).map(([slotKey, availableUsers]) => {
       const { date, startTime, endTime } = parseSlotKey(slotKey);
       const unavailableUsers = allParticipants.filter(name => !availableUsers.includes(name));
@@ -105,7 +112,54 @@ export default function DecisionPanel() {
     return candidates.sort((a, b) => b.matchRate - a.matchRate || b.availableCount - a.availableCount);
   }, [event]);
 
-  const top5Slots = useMemo(() => candidateSlots.slice(0, 5), [candidateSlots]);
+  const participantNames = useMemo(() => {
+    return event?.participants.map(p => getParticipantDisplayName(p)) || [];
+  }, [event]);
+
+  const vipNames = useMemo(() => {
+    if (!event?.participants || !Array.isArray(event.vipIds)) return [];
+    return event.participants
+      .filter(p => p.openid && event.vipIds?.includes(p.openid))
+      .map(p => getParticipantDisplayName(p));
+  }, [event]);
+
+  const summarizeNames = (names: string[], limit = 2) => {
+    if (names.length === 0) return '无';
+    const head = names.slice(0, limit).join('、');
+    return names.length > limit ? `${head} 等 ${names.length} 人` : head;
+  };
+
+  const cleanReason = (reason?: string) => {
+    return (reason || '').replace(/[^\u4e00-\u9fa5A-Za-z0-9]/g, '').trim();
+  };
+
+  const getDecisionSummary = (availableUsers: string[], reason?: string) => {
+    const availableSet = new Set(availableUsers);
+    const unavailableUsers = participantNames.filter(name => !availableSet.has(name));
+    const vipAvailableUsers = vipNames.filter(name => availableSet.has(name));
+    const vipUnavailableUsers = vipNames.filter(name => !availableSet.has(name));
+    const reasonParts: string[] = [];
+
+    if (vipNames.length > 0) {
+      reasonParts.push(vipUnavailableUsers.length === 0 ? '重点嘉宾全员可参加' : `${summarizeNames(vipUnavailableUsers, 1)}等重点嘉宾没空`);
+    }
+    reasonParts.push(unavailableUsers.length === 0 ? '全员都有空' : `仅 ${unavailableUsers.length} 人没空`);
+
+    const cleanedReason = cleanReason(reason);
+    if (cleanedReason && !reasonParts.includes(cleanedReason)) {
+      reasonParts.push(cleanedReason);
+    }
+
+    return {
+      unavailableUsers,
+      vipAvailableUsers,
+      vipUnavailableUsers,
+      vipText: vipNames.length > 0 ? `重点嘉宾 ${vipAvailableUsers.length}/${vipNames.length} 可参加` : '未设置重点嘉宾',
+      reasonText: reasonParts.slice(0, 2).join('，'),
+      unavailableText: summarizeNames(unavailableUsers, 2),
+      vipUnavailableText: summarizeNames(vipUnavailableUsers, 1)
+    };
+  };
 
   // 1. 提取去重后的时间行标签和日期列标签 (🚨 生成全局全量网格)
   const { rowLabels, dateLabels, slotKeys } = useMemo(() => {
@@ -165,7 +219,7 @@ export default function DecisionPanel() {
   const aggregatedStats = useMemo(() => {
     if (selectedKeys.size === 0) return null;
     const keysArr = Array.from(selectedKeys).sort();
-    const allParticipants = event?.participants.map(p => p.nickName) || [];
+    const allParticipants = participantNames;
 
     let available = [...allParticipants];
     keysArr.forEach(key => {
@@ -179,31 +233,38 @@ export default function DecisionPanel() {
     });
 
     const unavailable = allParticipants.filter(u => !available.includes(u));
+    const vipAvailable = vipNames.filter(name => available.includes(name));
+    const vipUnavailable = vipNames.filter(name => !available.includes(name));
 
     return {
       availableUsers: available,
       unavailableUsers: unavailable,
+      vipAvailableUsers: vipAvailable,
+      vipUnavailableUsers: vipUnavailable,
       count: keysArr.length,
       firstSlotDisplay: keysArr[0]
     };
-  }, [selectedKeys, candidateSlots, event]);
+  }, [selectedKeys, candidateSlots, participantNames, vipNames, isDateOnly]);
 
-  // 🚨 重构：修改 Top 5 列表的点击行为，从 Set单选改为 Set全选推荐包含的格子
   const handleTop5Click = (slotKeys: string[]) => {
     setSelectedKeys(new Set(slotKeys));
   };
 
   const bestWindows = useMemo(() => {
     if (!event) return [];
+    if (isDateOnly && !targetDays) return [];
+    if (!isDateOnly && !targetDuration) return [];
     if (isDateOnly) {
-      return findBestDateWindows(candidateSlots, targetDays, event.participants || [], event.vipIds || []);
+      return findBestDateWindows(candidateSlots, targetDays || 1, event.participants || [], event.vipIds || []);
     } else {
-      return findBestSlidingWindows(candidateSlots, targetDuration, event.granularity || 30, event.participants || [], event.vipIds || []);
+      return findBestSlidingWindows(candidateSlots, targetDuration || 60, event.granularity || 30, event.participants || [], event.vipIds || []);
     }
   }, [candidateSlots, targetDuration, targetDays, event, isDateOnly]);
 
-  // 仅日期模式取 Top 3，时段模式取 Top 5
-  const topMergedSlots = useMemo(() => bestWindows.slice(0, isDateOnly ? 3 : 5), [bestWindows, isDateOnly]);
+  const hasRecommendationTarget = isDateOnly ? !!targetDays : !!targetDuration;
+
+  // 精选 Top 3，更多探索交给热力图
+  const topMergedSlots = useMemo(() => bestWindows.slice(0, 3), [bestWindows]);
 
   const handleConfirm = async () => {
     if (!event || selectedKeys.size === 0) return;
@@ -250,13 +311,6 @@ export default function DecisionPanel() {
     }
   };
 
-  const handleViewSlotDetail = (slot: CandidateSlot) => {
-    const slotKey = `${slot.slot.date}_${slot.slot.startTime}-${slot.slot.endTime}`;
-    Taro.navigateTo({
-      url: `/pages/event/slot-detail/index?id=${event?.id}&slot=${encodeURIComponent(slotKey)}`
-    });
-  };
-
   if (initialLoading) {
     return (
       <View className="decision-page">
@@ -283,79 +337,121 @@ export default function DecisionPanel() {
         <View className="stats">
           <Text className="stat-item">📊 总参与：{event.participants.length} 人</Text>
           {candidateSlots.length > 0 && (
-            <Text className="stat-item">🎯 最佳匹配：{Math.round(top5Slots[0]?.matchRate * 100)}%</Text>
+            <Text className="stat-item">🎯 最佳匹配：{Math.round(candidateSlots[0]?.matchRate * 100)}%</Text>
           )}
         </View>
       </View>
 
       {candidateSlots.length > 0 ? (
         <>
-          {/* 时长筛选器 */}
           <View className="duration-filter">
-            <Text className="filter-label">{isDateOnly ? '⏱️ 预期活动天数：' : '⏱️ 预期活动时长：'}</Text>
-            <Picker mode="selector" range={isDateOnly ? dayOptions : durationOptions} rangeKey="label" onChange={(e: any) => {
-              if (isDateOnly) setTargetDays(dayOptions[Number(e.detail.value)].value);
-              else setTargetDuration(durationOptions[Number(e.detail.value)].value);
-            }}>
-              <View className="picker-value">
-                {isDateOnly ? dayOptions.find(opt => opt.value === targetDays)?.label : durationOptions.find(opt => opt.value === targetDuration)?.label} <Text className="arrow">▼</Text>
-              </View>
-            </Picker>
-          </View>
-
-          {bestWindows.length > 0 && (
-            <View className="top3-section">
-              <Text className="section-title">
-                {isDateOnly ? '🏆 推荐日期组合 Top 3' : '🏆 推荐时段（已合并连续时间）Top 5'}
+            <View className="duration-header">
+              <Text className="filter-label">{isDateOnly ? '推荐前先选择预计天数' : '推荐前先选择预计时长'}</Text>
+              <Text className="filter-desc">
+                {isDateOnly ? '系统会按活动天数推荐人最齐的日期组合' : '系统会按活动时长推荐人最齐的连续时段'}
               </Text>
-
-              {/* 🚨 新增：提取第一个推荐结果的 downgradeHint，作为全局横幅展示 */}
-              {topMergedSlots[0]?.downgradeHint && (
-                <View className="global-downgrade-banner">
-                  <Text className="warn-text">⚠️ {topMergedSlots[0].downgradeHint}</Text>
-                </View>
-              )}
-
-              {topMergedSlots.map((slot, index) => {
-                // 🚨 核心修复：判断该卡片包含的所有 slotKey 是否都在 selectedKeys 中
-                const isSelected = slot.slotKeys.length > 0 && slot.slotKeys.every((k: string) => selectedKeys.has(k));
-
+            </View>
+            <View className="duration-options">
+              {(isDateOnly ? dayOptions : durationOptions).map((option) => {
+                const active = isDateOnly ? targetDays === option.value : targetDuration === option.value;
                 return (
                   <View
-                    key={`merged-${slot.date}-${slot.startTime}`}
-                    className={`top3-card rank-${index + 1} ${isSelected ? 'selected' : ''}`}
-                    onClick={() => handleTop5Click(slot.slotKeys)}
+                    key={option.value}
+                    className={`duration-chip ${active ? 'active' : ''}`}
+                    onClick={() => {
+                      if (isDateOnly) setTargetDays(option.value);
+                      else setTargetDuration(option.value);
+                    }}
                   >
-                    <View className="rank-badge">{index + 1}</View>
-                    <View className="slot-info">
-                      <View className="date-row">
+                    <Text>{option.label}</Text>
+                    {option.recommended ? <Text className="chip-badge">推荐</Text> : null}
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+
+          <View className="top3-section">
+            <Text className="section-title">
+              {hasRecommendationTarget
+                ? (isDateOnly ? '🏆 推荐日期 Top 3' : '🏆 推荐时段 Top 3')
+                : '🏆 推荐方案'}
+            </Text>
+
+            {!hasRecommendationTarget ? (
+              <View className="recommend-empty">
+                <Text className="empty-title">{isDateOnly ? '先选择预计活动天数' : '先选择预计活动时长'}</Text>
+                <Text className="empty-desc">选择后，系统会推荐重点嘉宾优先、缺席人数更少的方案。</Text>
+              </View>
+            ) : topMergedSlots.length > 0 ? (
+              <>
+                {/* 🚨 新增：提取第一个推荐结果的 downgradeHint，作为全局横幅展示 */}
+                {topMergedSlots[0]?.downgradeHint && (
+                  <View className="global-downgrade-banner">
+                    <Text className="warn-text">⚠️ {topMergedSlots[0].downgradeHint}</Text>
+                  </View>
+                )}
+
+                {topMergedSlots.map((slot, index) => {
+                  // 🚨 核心修复：判断该卡片包含的所有 slotKey 是否都在 selectedKeys 中
+                  const isSelected = slot.slotKeys.length > 0 && slot.slotKeys.every((k: string) => selectedKeys.has(k));
+                  const summary = getDecisionSummary(slot.availableUsers || [], slot.recommendReason);
+
+                  return (
+                    <View
+                      key={`merged-${slot.date}-${slot.startTime || slot.startDate}`}
+                      className={`top3-card rank-${index + 1} ${isSelected ? 'selected' : ''}`}
+                      onClick={() => handleTop5Click(slot.slotKeys)}
+                    >
+                      <View className="recommend-card-top">
+                        <View className="rank-badge">Top {index + 1}</View>
+                        <View className="match-rate">
+                          <Text className="rate-text">{Math.round(slot.matchRate * 100)}%</Text>
+                          <Text className="count-text">{slot.availableCount}/{slot.totalCount} 人</Text>
+                        </View>
+                      </View>
+
+                      <View className="slot-info">
                         <Text className="date">
                           {isDateOnly && slot.startDate !== slot.endDate
                             ? `${formatDate(slot.startDate, 'MM/DD')}(${weekNames[new Date(slot.startDate.replace(/-/g, '/')).getDay()]}) - ${formatDate(slot.endDate, 'MM/DD')}(${weekNames[new Date(slot.endDate.replace(/-/g, '/')).getDay()]})`
                             : `${formatDate(slot.date, 'MM/DD')}(${weekNames[new Date(slot.date.replace(/-/g, '/')).getDay()]})`
                           }
                         </Text>
-                        {slot.recommendReason && <Text className="reason-tag">{slot.recommendReason}</Text>}
+                        {!isDateOnly && <Text className="time">{formatTime(slot.startTime)} - {formatTime(slot.endTime)}</Text>}
+                        {slot.slotKeys.length > 1 && (
+                          <Text className="merged-hint">{isDateOnly ? `连续 ${slot.slotKeys.length} 天` : `连续 ${slot.slotKeys.length} 个时段`}</Text>
+                        )}
                       </View>
-                      {/* 如果是日期模式，隐藏具体时间 */}
-                      {!isDateOnly && <Text className="time">{formatTime(slot.startTime)} - {formatTime(slot.endTime)}</Text>}
-                      {slot.slotKeys.length > 1 && (
-                        <Text className="merged-hint">{isDateOnly ? `连续 ${slot.slotKeys.length} 天` : `连续 ${slot.slotKeys.length} 个时段`}</Text>
-                      )}
-                      {/* 🚨 务必删除这里原本存在的 slot.downgradeHint 渲染代码 */}
-                    </View>
-                    <View className="match-rate">
-                      <Text className="rate-text">{Math.round(slot.matchRate * 100)}%</Text>
-                      <Text className="count-text">{slot.availableCount}/{slot.totalCount} 人</Text>
-                    </View>
 
-                    {/* 🚨 新增：右上角选中角标 */}
-                    {isSelected && <View className="selected-icon">✓</View>}
-                  </View>
-                );
-              })}
-            </View>
-          )}
+                      <View className={`vip-line ${summary.vipUnavailableUsers.length > 0 ? 'warn' : ''}`}>
+                        <Text>{summary.vipText}</Text>
+                        {summary.vipUnavailableUsers.length > 0 ? <Text className="vip-absent">缺席：{summary.vipUnavailableText}</Text> : null}
+                      </View>
+
+                      <View className="reason-line">
+                        <Text className="reason-label">推荐原因</Text>
+                        <Text className="reason-text">{summary.reasonText}</Text>
+                      </View>
+
+                      <View className="absent-line">
+                        <Text className="reason-label">没空</Text>
+                        <Text className="absent-text">{summary.unavailableUsers.length === 0 ? '无' : summary.unavailableText}</Text>
+                      </View>
+
+                      {/* 🚨 新增：右上角选中角标 */}
+                      {isSelected && <View className="selected-icon">✓</View>}
+                    </View>
+                  );
+                })}
+              </>
+            ) : (
+              <View className="recommend-empty">
+                <Text className="empty-title">暂时没有匹配方案</Text>
+                <Text className="empty-desc">可以缩短预计时长，或在热力图中手动选择更合适的时间。</Text>
+              </View>
+            )}
+          </View>
 
           {event.timeMode === TimeMode.TIME_SLOT && slotKeys.length > 0 && (
             <View className="heatmap-section">
@@ -462,6 +558,19 @@ export default function DecisionPanel() {
                 )}
               </View>
 
+              {vipNames.length > 0 && (
+                <View className={`dock-vip-bar ${aggregatedStats.vipUnavailableUsers.length > 0 ? 'warn' : ''}`}>
+                  <Text className="dock-vip-text">
+                    重点嘉宾 {aggregatedStats.vipAvailableUsers.length}/{vipNames.length} 可参加
+                  </Text>
+                  {aggregatedStats.vipUnavailableUsers.length > 0 && (
+                    <Text className="dock-vip-missing">
+                      没空：{summarizeNames(aggregatedStats.vipUnavailableUsers, 2)}
+                    </Text>
+                  )}
+                </View>
+              )}
+
               {/* ❌ 仅显示没空人员列表 */}
               {aggregatedStats.unavailableUsers.length > 0 && (
                 <View className="dock-group">
@@ -469,7 +578,7 @@ export default function DecisionPanel() {
                   <ScrollView scrollX className="user-scroll" enableFlex>
                     <View className="user-list">
                       {aggregatedStats.unavailableUsers.map(name => {
-                        const p = event.participants.find(x => x.nickName === name);
+                        const p = event.participants.find(x => getParticipantDisplayName(x) === name);
                         return (
                           <View key={name} className="user-item unavailable">
                             <View className="user-avatar">
@@ -531,13 +640,13 @@ export default function DecisionPanel() {
 
             {decisionGuideStep === 1 ? (
               <View className="guide-body">
-                <View className="guide-title">⏳ 第一步：调整预计时长</View>
+                <View className="guide-title">⏳ 第一步：选择预计时长</View>
                 <View className="guide-text-block">
                   <View className="guide-desc" style={{ marginBottom: '8px' }}>
-                    推荐结果会随 <Text style={{ fontWeight: 'bold', color: '#333' }}>事件时长</Text> 实时更新。
+                    推荐结果会随 <Text style={{ fontWeight: 'bold', color: '#333' }}>预计时长</Text> 实时更新。
                   </View>
                   <View className="guide-desc">
-                    请先在页面顶部选择本次活动预计需要多长的时间哦～
+                    请先选择本次活动大概需要多长时间，系统再给出推荐方案。
                   </View>
                 </View>
                 <Button className="btn-primary guide-btn" onClick={nextDecisionStep}>

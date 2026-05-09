@@ -47,6 +47,7 @@ export interface ParticipantAvailability {
   participantId?: string;
   userId: string;
   nickName: string;
+  eventDisplayName?: string;
   avatarUrl?: string; // 新增：用户头像
   openid?: string;    // 新增：用户唯一标识
   availableSlots: string[];

@@ -104,13 +104,14 @@
       }
 
       .participant-action-hint {
-        padding: 0 10px;
-        color: #c8c9cc;
-        font-size: 18px;
-        font-weight: bold;
+        padding: 0 4px 0 10px;
+        color: #07c160;
+        font-size: 12px;
+        font-weight: 600;
         display: flex;
         align-items: center;
         justify-content: center;
+        flex-shrink: 0;
       }
 
       .vip-guide-tooltip {

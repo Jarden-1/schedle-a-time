@@ -2,7 +2,7 @@
   "name": "time-scheduler",
   "version": "1.0.0",
   "private": true,
-  "description": "约时间助手 - 多人协调空闲时间微信小程序",
+  "description": "约时间工具 - 多人协调空闲时间微信小程序",
   "templateInfo": {
     "name": "default",
     "typescript": true,

@@ -1,4 +1,4 @@
 export default definePageConfig({
-  navigationBarTitleText: '约时间助手',
+  navigationBarTitleText: '约时间工具',
   enablePullDownRefresh: true
 })

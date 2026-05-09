@@ -1,4 +1,4 @@
-# 约时间助手 Time Scheduler
+# 约时间工具 Time Scheduler
 
 一个帮助多人快速协调共同空闲时间的微信小程序。
 

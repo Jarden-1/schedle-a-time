@@ -3,7 +3,7 @@ import { View, Text, ScrollView, Button, Image } from '@tarojs/components';
 import { useState, useMemo } from 'react';
 import { Event } from '@/types';
 import { useAppStore } from '@/store';
-import { formatDate, parseSlotKey } from '@/utils';
+import { formatDate, getParticipantDisplayName, parseSlotKey } from '@/utils';
 import Loading from '@/components/Loading';
 import './index.scss';
 
@@ -12,6 +12,7 @@ export default function SlotDetail() {
   const [slotKey, setSlotKey] = useState('');
   const [initialLoading, setInitialLoading] = useState(true);
   const [confirming, setConfirming] = useState(false);
+  const [expandedUnavailable, setExpandedUnavailable] = useState<Set<string>>(new Set());
   const { events, getEventById, confirmTimeAPI, currentUser } = useAppStore();
 
   // 在组件顶层定义
@@ -142,27 +143,83 @@ export default function SlotDetail() {
     const unavailable: any[] = [];
     const keys = slotKey.split(',').sort(); // 🚨 优雅修复
 
+    const formatMissingRanges = (missingKeys: string[]) => {
+      if (event.timeMode === 'date_only' || (event.timeMode as any) === 'DATE_ONLY') {
+        return missingKeys.map(k => {
+          const d = new Date(k);
+          return `${formatDate(k, 'MM/DD')}(${weekNames[d.getDay()]})`;
+        });
+      }
+
+      const parsed = missingKeys.map(k => parseSlotKey(k)).sort((a, b) => {
+        if (a.date !== b.date) return a.date.localeCompare(b.date);
+        return a.startTime.localeCompare(b.startTime);
+      });
+      const byDate: Record<string, typeof parsed> = {};
+      parsed.forEach(item => {
+        if (!byDate[item.date]) byDate[item.date] = [];
+        byDate[item.date].push(item);
+      });
+
+      const ranges: string[] = [];
+      Object.keys(byDate).sort().forEach(date => {
+        const slots = byDate[date];
+        const d = new Date(date);
+        const dateText = `${formatDate(date, 'MM/DD')}(${weekNames[d.getDay()]})`;
+        let start = slots[0]?.startTime;
+        let end = slots[0]?.endTime;
+        for (let i = 1; i < slots.length; i++) {
+          if (slots[i].startTime === end) {
+            end = slots[i].endTime;
+          } else {
+            ranges.push(`${dateText} ${start}-${end}`);
+            start = slots[i].startTime;
+            end = slots[i].endTime;
+          }
+        }
+        if (start) ranges.push(`${dateText} ${start}-${end}`);
+      });
+      return ranges;
+    };
+
     event.participants.forEach(p => {
-      const missingKeys = keys.filter(k => !p.availableSlots.includes(k));
+      const availableSlots = Array.isArray(p.availableSlots) ? p.availableSlots : [];
+      const missingKeys = keys.filter(k => !availableSlots.includes(k));
+      const displayName = getParticipantDisplayName(p);
+      const participantKey = p.participantId || p.openid || p.nickName || displayName;
       if (missingKeys.length === 0) {
-        available.push(p);
+        available.push({ ...p, displayName, participantKey });
       } else {
-        const missingText = missingKeys.map(k => {
-          try {
-            const parsed = parseSlotKey(k);
-            const d = new Date(parsed.date);
-            const dateStr = formatDate(parsed.date, 'MM/DD');
-            const weekStr = weekNames[d.getDay()];
-            return event.timeMode === 'date_only'
-              ? `${dateStr}(${weekStr})`
-              : `${dateStr}(${weekStr}) ${parsed.startTime}-${parsed.endTime}`;
-          } catch { return k; }
-        }).join('，');
-        unavailable.push({ ...p, missingText });
+        const missingRanges = formatMissingRanges(missingKeys);
+        const missingStatus = availableSlots.length === 0
+          ? '未填写时间'
+          : missingKeys.length === keys.length
+            ? '所选时段均没空'
+            : `缺席 ${missingKeys.length}/${keys.length} 个时段`;
+        const missingSummary = missingRanges.length > 2
+          ? `${missingRanges.slice(0, 2).join('，')} 等 ${missingRanges.length} 段`
+          : missingRanges.join('，');
+        unavailable.push({
+          ...p,
+          displayName,
+          participantKey,
+          missingRanges,
+          missingSummary,
+          missingStatus
+        });
       }
     });
     return { available, unavailable };
   }, [event, slotKey]);
+
+  const toggleUnavailableDetail = (key: string) => {
+    setExpandedUnavailable(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
 
   if (initialLoading) {
     return (
@@ -215,13 +272,13 @@ export default function SlotDetail() {
           {available.length > 0 ? (
             <View className="user-grid">
               {available.map((p: any) => (
-                <View key={p.nickName} className="user-card available">
+                <View key={p.participantKey} className="user-card available">
                   {p?.avatarUrl && p.avatarUrl.trim() !== '' ? (
                     <Image className="avatar-img" src={p.avatarUrl} mode="aspectFill" />
                   ) : (
                     <View className="avatar-fallback">👤</View>
                   )}
-                  <Text className="name">{p.nickName}</Text>
+                  <Text className="name">{p.displayName}</Text>
                 </View>
               ))}
             </View>
@@ -238,7 +295,11 @@ export default function SlotDetail() {
           {unavailable.length > 0 ? (
             <View className="vertical-user-list">
               {unavailable.map((p: any) => (
-                <View key={p.nickName} className="vertical-user-item">
+                <View
+                  key={p.participantKey}
+                  className="vertical-user-item"
+                  onClick={() => toggleUnavailableDetail(p.participantKey)}
+                >
                   <View className="avatar-wrapper">
                     {p?.avatarUrl && p.avatarUrl.trim() !== '' ? (
                       <Image className="avatar-img" src={p.avatarUrl} mode="aspectFill" />
@@ -247,8 +308,18 @@ export default function SlotDetail() {
                     )}
                   </View>
                   <View className="info-wrapper">
-                    <Text className="user-name">{p.nickName}</Text>
-                    <Text className="missing-reason">缺席时段: {p.missingText}</Text>
+                    <Text className="user-name">{p.displayName}</Text>
+                    <View className="missing-status-row">
+                      <Text className="missing-status">{p.missingStatus}</Text>
+                      {p.missingRanges.length > 2 ? (
+                        <Text className="missing-toggle">
+                          {expandedUnavailable.has(p.participantKey) ? '收起' : '展开'}
+                        </Text>
+                      ) : null}
+                    </View>
+                    <Text className="missing-reason">
+                      {expandedUnavailable.has(p.participantKey) ? p.missingRanges.join('，') : p.missingSummary}
+                    </Text>
                   </View>
                 </View>
               ))}

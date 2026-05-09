@@ -91,8 +91,17 @@ export const generateId = (): string => {
   return `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 };
 
+export const getParticipantDisplayName = (participant: any, fallback = '未命名'): string => {
+  const eventDisplayName = participant?.eventDisplayName;
+  if (typeof eventDisplayName === 'string' && eventDisplayName.trim()) {
+    return eventDisplayName.trim();
+  }
+
+  return participant?.nickName || participant?.nickname || fallback;
+};
+
 export const generateShareInfo = (event: any) => {
-  if (!event) return { title: '约时间助手', path: '/pages/index/index' };
+  if (!event) return { title: '约时间工具', path: '/pages/index/index' };
 
   // 1. 智能匹配底图逻辑
   let bgUrl = shareBgMeeting; // 默认使用商务会议图
@@ -257,7 +266,7 @@ export const findBestSlidingWindows = (
 ): any[] => {
   if (candidateSlots.length === 0 || targetDurationMinutes <= 0) return [];
 
-  const vipNickNames = participants.filter(p => vipIds?.includes(p.openid)).map(p => p.nickName);
+  const vipNickNames = participants.filter(p => vipIds?.includes(p.openid)).map(p => getParticipantDisplayName(p));
 
   const slotsByDate = new Map<string, any[]>();
   candidateSlots.forEach(slot => {
@@ -383,7 +392,7 @@ export const findBestDateWindows = (
   vipIds: string[] = []
 ): any[] => {
   if (candidateSlots.length === 0 || targetDays <= 0) return [];
-  const vipNickNames = participants.filter(p => vipIds?.includes(p.openid)).map(p => p.nickName);
+  const vipNickNames = participants.filter(p => vipIds?.includes(p.openid)).map(p => getParticipantDisplayName(p));
 
   // 日期模式下 candidateSlot.slot.date 已经是唯一的
   const sortedSlots = [...candidateSlots].sort((a, b) => a.slot.date.localeCompare(b.slot.date));

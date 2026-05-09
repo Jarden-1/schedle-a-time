@@ -140,7 +140,7 @@ export default function Profile() {
         // 🚨 2. 核心大换血：直接调用咱们自己后端的微信静默登录，拿取 OpenID！
         const userRes = await loginWithWeChat();
         if (!userRes?.openid) {
-          throw new Error('连接本地服务器登录失败，请检查网络');
+          throw new Error('连接服务器登录失败，请检查网络');
         }
 
         // 3. 把拿到 openid 和 头像、昵称，一起存入本地全局状态
@@ -344,7 +344,7 @@ export default function Profile() {
       </View>
 
       <View className="footer">
-        <Text className="version">约时间助手 v1.0.0</Text>
+        <Text className="version">约时间工具 v1.0.0</Text>
       </View>
     </View>
   );

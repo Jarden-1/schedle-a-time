@@ -3,6 +3,7 @@ import { View, Text, Image, Button } from '@tarojs/components';
 import { useState, useCallback, useEffect } from 'react';
 import { Event } from '@/types';
 import { useAppStore } from '@/store';
+import { getParticipantDisplayName } from '@/utils';
 import Loading from '@/components/Loading';
 import EmptyState from '@/components/EmptyState';
 import './index.scss';
@@ -99,22 +100,27 @@ export default function EventParticipants() {
 
       const participantOpenid: string | undefined = participant?.openid;
       const isTargetCreator = !!(participantOpenid && participantOpenid === event.creatorId);
-      if (isTargetCreator) return;
 
       const isTargetAdmin = !!(
         participantOpenid && Array.isArray(event.adminIds) && event.adminIds.includes(participantOpenid)
       );
 
       let itemList: string[] = [];
+      itemList.push('修改显示名称');
+      if (participant?.eventDisplayName) {
+        itemList.push('恢复原昵称');
+      }
+
       const isTargetVip = !!(
         participantOpenid && Array.isArray(event.vipIds) && event.vipIds.includes(participantOpenid)
       );
 
-      if (isCreator) {
+      if (isCreator && !isTargetCreator) {
         itemList = isTargetAdmin ? ['取消管理员'] : ['设为管理员'];
+        itemList.unshift(...(participant?.eventDisplayName ? ['修改显示名称', '恢复原昵称'] : ['修改显示名称']));
         itemList.push(isTargetVip ? '取消重点嘉宾' : '设为重点嘉宾');
         itemList.push('移除该成员');
-      } else if (isAdmin) {
+      } else if (isAdmin && !isTargetCreator) {
         if (!isTargetAdmin) {
           itemList.push(isTargetVip ? '取消重点嘉宾' : '设为重点嘉宾');
           itemList.push('移除该成员');
@@ -129,8 +135,37 @@ export default function EventParticipants() {
 
         let apiAction: 'SET_ADMIN' | 'REMOVE_ADMIN' | 'KICK_MEMBER' | 'SET_VIP' | 'REMOVE_VIP' | null = null;
         let successToast = '';
+        let nextDisplayName: string | undefined;
 
         switch (action) {
+          case '修改显示名称': {
+            const modalRes: any = await Taro.showModal({
+              title: '修改显示名称',
+              editable: true,
+              placeholderText: getParticipantDisplayName(participant),
+              confirmText: '保存',
+              cancelText: '取消'
+            } as any);
+            const displayName = modalRes?.content?.trim();
+            if (!modalRes.confirm) return;
+            if (!displayName) {
+              Taro.showToast({ title: '名称不能为空', icon: 'none' });
+              return;
+            }
+            if (displayName.length > 20) {
+              Taro.showToast({ title: '名称不能超过20个字', icon: 'none' });
+              return;
+            }
+            apiAction = 'RENAME_MEMBER' as any;
+            nextDisplayName = displayName;
+            successToast = '已修改显示名称';
+            break;
+          }
+          case '恢复原昵称':
+            apiAction = 'RENAME_MEMBER' as any;
+            nextDisplayName = '';
+            successToast = '已恢复原昵称';
+            break;
           case '设为管理员':
             if (!participantOpenid) {
               Taro.showToast({ title: '该成员无 openid，无法设为管理员', icon: 'none' });
@@ -176,7 +211,14 @@ export default function EventParticipants() {
         setActionLoading(true);
         Taro.showLoading({ title: '处理中' });
         try {
-          const ok = await manageMemberAPI(event.id, participantOpenid, participant.nickName, apiAction, participant.participantId);
+          const ok = await manageMemberAPI(
+            event.id,
+            participantOpenid,
+            participant.nickName,
+            apiAction,
+            participant.participantId,
+            nextDisplayName
+          );
           if (ok) {
             Taro.showToast({ title: successToast, icon: 'success' });
             await loadEvent(event.id);
@@ -263,6 +305,10 @@ export default function EventParticipants() {
             const isMemberCreator = !!(openid && openid === event.creatorId);
             const isMemberAdmin = !!(openid && Array.isArray(event.adminIds) && event.adminIds.includes(openid));
             const isMemberVip = !!(openid && Array.isArray(event.vipIds) && event.vipIds.includes(openid));
+            const displayName = getParticipantDisplayName(
+              p,
+              isMemberCreator ? event.creatorNickName : '未命名'
+            );
 
             return (
               <View
@@ -283,7 +329,7 @@ export default function EventParticipants() {
                   <View className="participant-name-row">
                     {/* 🚨 终极修复：增加多个兜底显示，如果本人 nickName 丢失，强制取发起人昵称 */}
                     <Text className="participant-name">
-                      {p?.nickName || p?.nickname || (isMemberCreator ? event.creatorNickName : '未命名')}
+                      {displayName}
                     </Text>
                     {isMemberCreator ? <Text className="tag tag-creator">👑 发起人</Text> : null}
                     {!isMemberCreator && isMemberAdmin ? <Text className="tag tag-admin">⭐ 管理员</Text> : null}
@@ -292,9 +338,9 @@ export default function EventParticipants() {
                 </View>
 
                 {/* 🚨 新增：操作暗示图标 (三个点) */}
-                {canManage && !isMemberCreator && (
+                {canManage && (
                   <View className="participant-action-hint">
-                    <Text>⋮</Text>
+                    <Text>管理 〉</Text>
                   </View>
                 )}
 
@@ -302,7 +348,7 @@ export default function EventParticipants() {
                 {showVipGuide && guideTargetIndex === idx && (
                   <View className="vip-guide-tooltip">
                     <View className="tooltip-arrow"></View>
-                    <Text>💡 设为“重点嘉宾”，系统推荐时间将优先照顾 TA 哦！</Text>
+                    <Text>点击成员可修改显示名、设置重点嘉宾</Text>
                   </View>
                 )}
               </View>

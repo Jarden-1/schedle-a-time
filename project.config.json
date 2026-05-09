@@ -1,5 +1,5 @@
 {
-  "description": "约时间助手小程序",
+  "description": "约时间工具小程序",
   "miniprogramRoot": "dist/",
   "setting": {
     "urlCheck": false,

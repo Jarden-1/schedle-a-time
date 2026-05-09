@@ -1178,6 +1178,26 @@
   }
 }
 
+.decision-page {
+  .heatmap-section,
+  .date-only-section {
+    order: 1;
+    margin-top: 16px;
+  }
+
+  .confirm-section {
+    order: 4;
+  }
+
+  .duration-filter {
+    order: 2;
+  }
+
+  .top3-section {
+    order: 3;
+  }
+}
+
 
 /* --- 决策面板分步引导弹窗样式 --- */
 .guide-modal-overlay {
@@ -1270,4 +1290,301 @@
 @keyframes popIn {
   from { opacity: 0; transform: scale(0.95); }
   to { opacity: 1; transform: scale(1); }
+}
+
+/* Decision recommendation redesign overrides */
+.decision-page {
+  .duration-filter {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .duration-header {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .filter-desc {
+    display: block;
+    font-size: 12px;
+    color: #8a8a8a;
+    line-height: 1.5;
+  }
+
+  .duration-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .duration-chip {
+    min-width: 78px;
+    min-height: 36px;
+    padding: 8px 12px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background: #f8faf9;
+    color: #333;
+    font-size: 13px;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    position: relative;
+    transition: all 0.18s ease;
+
+    &.active {
+      color: #07c160;
+      background: rgba(7, 193, 96, 0.08);
+      border-color: rgba(7, 193, 96, 0.65);
+      font-weight: 600;
+      box-shadow: 0 4px 12px rgba(7, 193, 96, 0.12);
+    }
+
+    &:active {
+      transform: scale(0.97);
+    }
+  }
+
+  .chip-badge {
+    font-size: 10px;
+    line-height: 1;
+    padding: 3px 5px;
+    border-radius: 6px;
+    color: #d46b08;
+    background: #fff3d8;
+    font-weight: 600;
+  }
+
+  .top3-section {
+    .recommend-empty {
+      padding: 22px 16px;
+      border-radius: 8px;
+      border: 1px dashed #d8dedb;
+      background: #fbfcfb;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .empty-title {
+      display: block;
+      font-size: 15px;
+      font-weight: 600;
+      color: #333;
+      text-align: center;
+    }
+
+    .empty-desc {
+      display: block;
+      font-size: 12px;
+      color: #888;
+      line-height: 1.5;
+      text-align: center;
+    }
+
+    .top3-card {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 12px;
+      padding: 14px;
+      background: #fbfcfb;
+      border: 1px solid #edf0ee;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      box-shadow: 0 2px 10px rgba(16, 24, 40, 0.03);
+
+      &.selected {
+        border-color: #07c160;
+        background: #f4fff9;
+      }
+
+      &.rank-1 .rank-badge,
+      &.rank-2 .rank-badge,
+      &.rank-3 .rank-badge {
+        background: #111827;
+        color: #fff;
+      }
+
+      .recommend-card-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .rank-badge {
+        width: auto;
+        height: auto;
+        min-width: 54px;
+        padding: 5px 10px;
+        margin-right: 0;
+        border-radius: 999px;
+        font-size: 12px;
+        line-height: 1.2;
+        font-weight: 700;
+        background: #111827;
+        color: #fff;
+        box-sizing: border-box;
+      }
+
+      .match-rate {
+        margin-right: 0;
+        text-align: right;
+        flex-shrink: 0;
+
+        .rate-text {
+          font-size: 22px;
+          line-height: 1.1;
+          color: #07c160;
+          font-weight: 800;
+        }
+
+        .count-text {
+          margin-top: 2px;
+          font-size: 11px;
+          color: #777;
+        }
+      }
+
+      .slot-info {
+        flex: none;
+        min-width: 0;
+        padding-bottom: 2px;
+
+        .date {
+          display: block;
+          white-space: normal;
+          overflow: visible;
+          text-overflow: clip;
+          font-size: 16px;
+          line-height: 1.35;
+          font-weight: 700;
+          color: #222;
+          margin-bottom: 4px;
+        }
+
+        .time {
+          display: block;
+          font-size: 14px;
+          color: #555;
+          line-height: 1.35;
+        }
+
+        .merged-hint {
+          display: inline-flex;
+          margin-top: 8px;
+          padding: 3px 7px;
+          border-radius: 6px;
+          background: #eef7f2;
+          color: #087b43;
+          font-size: 11px;
+          font-weight: 600;
+        }
+      }
+
+      .vip-line,
+      .reason-line,
+      .absent-line {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        padding: 9px 10px;
+        border-radius: 8px;
+        background: #fff;
+        border: 1px solid #eef0ef;
+        line-height: 1.45;
+      }
+
+      .vip-line {
+        color: #087b43;
+        font-size: 12px;
+        font-weight: 600;
+        justify-content: space-between;
+
+        &.warn {
+          color: #b42318;
+          background: #fff7f6;
+          border-color: #ffd8d3;
+        }
+      }
+
+      .vip-absent {
+        color: #d92d20;
+        font-size: 12px;
+        font-weight: 500;
+        text-align: right;
+      }
+
+      .reason-label {
+        flex-shrink: 0;
+        min-width: 52px;
+        font-size: 11px;
+        color: #8a8a8a;
+      }
+
+      .reason-text,
+      .absent-text {
+        flex: 1;
+        min-width: 0;
+        font-size: 12px;
+        color: #333;
+        word-break: break-word;
+      }
+
+      .absent-text {
+        color: #666;
+      }
+    }
+  }
+
+  .confirm-section {
+    .dock-summary-bar {
+      align-items: flex-start;
+      gap: 8px;
+
+      .summary-text {
+        line-height: 1.45;
+      }
+    }
+
+    .dock-vip-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin: 0 0 12px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: #f1fbf5;
+      border: 1px solid rgba(7, 193, 96, 0.18);
+
+      &.warn {
+        background: #fff7f6;
+        border-color: #ffd8d3;
+      }
+    }
+
+    .dock-vip-text {
+      font-size: 12px;
+      color: #087b43;
+      font-weight: 600;
+      line-height: 1.4;
+    }
+
+    .dock-vip-bar.warn .dock-vip-text {
+      color: #b42318;
+    }
+
+    .dock-vip-missing {
+      font-size: 12px;
+      color: #d92d20;
+      line-height: 1.4;
+      text-align: right;
+    }
+  }
 }

@@ -254,7 +254,7 @@ export default function Index() {
     <View className='index-page'>
       <View className='hero-section'>
         <View className='hero-content'>
-          <Text className='hero-title'>约时间助手</Text>
+          <Text className='hero-title'>约时间工具</Text>
           <Text className='hero-subtitle'>把"大家什么时候有空？"变成一键决策</Text>
           <Button className='create-btn create-btn--hint' onClick={handleCreate}>
             + 发起约时间

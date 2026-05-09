@@ -27,11 +27,15 @@ const requestAPI = async (endpoint: string, method: 'GET' | 'POST' | 'PUT' | 'DE
     });
     if (res.statusCode === 401) {
       Taro.removeStorageSync('token');
-      throw new Error('登录已过期，请重新登录');
+      const authError = new Error('登录已过期，请重新登录');
+      (authError as any).statusCode = 401;
+      throw authError;
     }
     if (res.statusCode < 200 || res.statusCode >= 300) {
       const errorMsg = (res.data as any)?.error || `请求失败 (${res.statusCode})`;
-      throw new Error(errorMsg);
+      const apiError = new Error(errorMsg);
+      (apiError as any).statusCode = res.statusCode;
+      throw apiError;
     }
     return res.data; // 返回 { success, data, error } 格式
   } catch (error) {
@@ -65,7 +69,7 @@ interface AppState {
   deleteEventAPI: (eventId: string) => Promise<boolean>;
   updateAvailabilityAPI: (eventId: string, nickName: string, availableSlots: string[], isProxy?: boolean) => Promise<boolean>;
   confirmTimeAPI: (eventId: string, slots: Slot | Slot[]) => Promise<boolean>;
-  manageMemberAPI: (eventId: string, targetOpenid: string | undefined, targetNickName: string, action: 'SET_ADMIN' | 'REMOVE_ADMIN' | 'KICK_MEMBER' | 'SET_VIP' | 'REMOVE_VIP', targetParticipantId?: string) => Promise<boolean>;
+  manageMemberAPI: (eventId: string, targetOpenid: string | undefined, targetNickName: string, action: 'SET_ADMIN' | 'REMOVE_ADMIN' | 'KICK_MEMBER' | 'SET_VIP' | 'REMOVE_VIP' | 'RENAME_MEMBER', targetParticipantId?: string, targetDisplayName?: string) => Promise<boolean>;
 
   // 🚨 新增：全局更新用户资料 API 定义
   updateUserProfileAPI: (nickName?: string, avatarUrl?: string) => Promise<boolean>;
@@ -205,6 +209,14 @@ export const useAppStore = create<AppState>((set, get) => ({
       return 'NEED_LOGIN';
     }
 
+    if (!Taro.getStorageSync('token')) {
+      const refreshedUser = await get().loginWithWeChat();
+      if (!refreshedUser?.openid) {
+        set({ loading: false });
+        return 'NEED_LOGIN';
+      }
+    }
+
     const newEvent: Event = {
       id: generateId(),
       title: form.title,
@@ -232,10 +244,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       updatedAt: new Date().toISOString()
     };
 
-    try {
-      // 🚨 真实向后端发起请求
+    const sendCreateRequest = async () => {
       const result = await requestAPI('/events', 'POST', newEvent);
-
       if (result?.success && result.data) {
         set((state) => ({
           events: [result.data, ...state.events],
@@ -245,7 +255,23 @@ export const useAppStore = create<AppState>((set, get) => ({
         return result.data as Event;
       }
       throw new Error('服务器端创建失败');
-    } catch (error) {
+    };
+
+    try {
+      // 🚨 真实向后端发起请求
+      return await sendCreateRequest();
+    } catch (error: any) {
+      if (error?.statusCode === 401) {
+        const refreshedUser = await get().loginWithWeChat();
+        if (refreshedUser?.openid) {
+          try {
+            return await sendCreateRequest();
+          } catch (retryError) {
+            console.error('Create event retry error:', retryError);
+          }
+        }
+      }
+
       console.error('Create event error:', error);
       // 🚨 废除本地兜底！失败就是失败，直接阻断并弹窗提示！
       Taro.showToast({ title: '创建失败，请确保已登录', icon: 'error' });
@@ -348,13 +374,14 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
-  manageMemberAPI: async (eventId, targetOpenid, targetNickName, action, targetParticipantId) => {
+  manageMemberAPI: async (eventId, targetOpenid, targetNickName, action, targetParticipantId, targetDisplayName) => {
     set({ loading: true });
     try {
       const result = await requestAPI(`/events/${eventId}/members`, 'POST', {
         targetOpenid,
         targetParticipantId,
         targetNickName,
+        targetDisplayName,
         action
       });
 
