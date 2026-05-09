@@ -1,6 +1,5 @@
 {
-  "description": "约时间助手云函数",
-  "cloudfunctionRoot": "cloud/functions/",
+  "description": "约时间助手小程序",
   "miniprogramRoot": "dist/",
   "setting": {
     "urlCheck": false,
