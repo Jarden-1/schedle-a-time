@@ -34,6 +34,11 @@ export default function Profile() {
 
   const uploadAvatarToCloud = useCallback(
     async (tempPath: string) => {
+      if (!Taro.getStorageSync('token')) {
+        const userRes = await loginWithWeChat();
+        if (!userRes?.openid) throw new Error('登录失败');
+      }
+
       // 🚨 第 1 道防线：Taro 原生压缩图片，极大降低服务器压力
       const compressRes = await Taro.compressImage({
         src: tempPath,
@@ -45,7 +50,10 @@ export default function Profile() {
       const uploadRes = await Taro.uploadFile({
         url: UPLOAD_URL, // 与 BASE_URL 同源的上传地址
         filePath: compressedPath,
-        name: 'file'
+        name: 'file',
+        header: {
+          Authorization: `Bearer ${Taro.getStorageSync('token') || ''}`
+        }
       });
 
       const data = JSON.parse(uploadRes.data);
@@ -53,7 +61,7 @@ export default function Profile() {
 
       return { fileId: data.url, previewUrl: data.url };
     },
-    []
+    [loginWithWeChat, UPLOAD_URL]
   );
 
   const resetPendingProfile = useCallback(() => {

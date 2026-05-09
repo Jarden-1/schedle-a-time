@@ -44,6 +44,7 @@ export interface TimeSlot {
 
 // 参与者的可用时间
 export interface ParticipantAvailability {
+  participantId?: string;
   userId: string;
   nickName: string;
   avatarUrl?: string; // 新增：用户头像
@@ -77,6 +78,7 @@ export interface Event {
   granularity: TimeGranularity;
   status: EventStatus;
   participants: ParticipantAvailability[];
+  confirmedSlots?: TimeSlot[];
   confirmedSlot?: TimeSlot | null;
   createdAt: string;
   updatedAt: string;

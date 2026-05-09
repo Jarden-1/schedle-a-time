@@ -176,7 +176,7 @@ export default function EventParticipants() {
         setActionLoading(true);
         Taro.showLoading({ title: '处理中' });
         try {
-          const ok = await manageMemberAPI(event.id, participantOpenid, participant.nickName, apiAction);
+          const ok = await manageMemberAPI(event.id, participantOpenid, participant.nickName, apiAction, participant.participantId);
           if (ok) {
             Taro.showToast({ title: successToast, icon: 'success' });
             await loadEvent(event.id);

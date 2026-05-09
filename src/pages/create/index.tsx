@@ -143,23 +143,26 @@ export default function CreateEvent() {
     try {
       Taro.showLoading({ title: '正在登录...' });
 
-      // 1. 压缩图片
+      // 1. 先登录拿 token。上传接口已要求鉴权。
+      const userRes = await loginWithWeChat();
+      if (!userRes?.openid) throw new Error('登录失败');
+
+      // 2. 压缩图片
       const compressRes = await Taro.compressImage({ src: avatarPath, quality: 30 });
       
-      // 2. 发送到服务器
+      // 3. 发送到服务器
       const uploadRes = await Taro.uploadFile({
         url: UPLOAD_URL, // 与 BASE_URL 同源的上传地址
-filePath: compressRes.tempFilePath,
-        name: 'file'
+        filePath: compressRes.tempFilePath,
+        name: 'file',
+        header: {
+          Authorization: `Bearer ${Taro.getStorageSync('token') || ''}`
+        }
       });
       
       const data = JSON.parse(uploadRes.data);
       if (!data.success || !data.url) throw new Error('头像上传失败');
       
-      // 3. 静默调用微信登录换取 Token
-      const userRes = await loginWithWeChat();
-      if (!userRes?.openid) throw new Error('登录失败');
-
       // 4. 将最新用户信息存入 Store
       setCurrentUser({
         id: userRes.openid,

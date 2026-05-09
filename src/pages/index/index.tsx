@@ -199,7 +199,12 @@ export default function Index() {
     setLocalEvents((prev) =>
       prev.map((e) => (e.id === eventId && e.participants ? { ...e, participants: e.participants.filter((p) => p.nickName !== userNickName) } : e))
     );
-    const success = await manageMemberAPI(eventId, currentUser?.openid || '', userNickName, 'KICK_MEMBER');
+    const event = events.find((e) => e.id === eventId);
+    const participant = event?.participants?.find((p) => {
+      if (currentUser?.openid && p.openid === currentUser.openid) return true;
+      return p.nickName === userNickName;
+    });
+    const success = await manageMemberAPI(eventId, currentUser?.openid || participant?.openid || '', userNickName, 'KICK_MEMBER', participant?.participantId);
     if (success) {
       Taro.showToast({ title: '已退出', icon: 'success' });
     } else {

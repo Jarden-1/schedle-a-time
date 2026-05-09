@@ -55,10 +55,18 @@ export default function LoginCard({
           // 非 weapp 或压缩失败时直接用原图
         }
 
+        if (!Taro.getStorageSync('token')) {
+          const userRes = await loginWithWeChat();
+          if (!userRes?.openid) throw new Error('登录失败');
+        }
+
         const uploadRes = await Taro.uploadFile({
           url: UPLOAD_URL,
           filePath,
-          name: 'file'
+          name: 'file',
+          header: {
+            Authorization: `Bearer ${Taro.getStorageSync('token') || ''}`
+          }
         });
 
         const data = JSON.parse((uploadRes as any).data || '{}');
@@ -75,7 +83,7 @@ export default function LoginCard({
         setSaving(false);
       }
     },
-    []
+    [loginWithWeChat, UPLOAD_URL]
   );
 
   const handleSave = useCallback(async () => {

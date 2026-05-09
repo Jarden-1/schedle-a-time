@@ -25,6 +25,14 @@ const requestAPI = async (endpoint: string, method: 'GET' | 'POST' | 'PUT' | 'DE
         'Authorization': `Bearer ${token}`
       }
     });
+    if (res.statusCode === 401) {
+      Taro.removeStorageSync('token');
+      throw new Error('登录已过期，请重新登录');
+    }
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      const errorMsg = (res.data as any)?.error || `请求失败 (${res.statusCode})`;
+      throw new Error(errorMsg);
+    }
     return res.data; // 返回 { success, data, error } 格式
   } catch (error) {
     console.error(`Request ${endpoint} error:`, error);
@@ -57,7 +65,7 @@ interface AppState {
   deleteEventAPI: (eventId: string) => Promise<boolean>;
   updateAvailabilityAPI: (eventId: string, nickName: string, availableSlots: string[], isProxy?: boolean) => Promise<boolean>;
   confirmTimeAPI: (eventId: string, slots: Slot | Slot[]) => Promise<boolean>;
-  manageMemberAPI: (eventId: string, targetOpenid: string | undefined, targetNickName: string, action: 'SET_ADMIN' | 'REMOVE_ADMIN' | 'KICK_MEMBER' | 'SET_VIP' | 'REMOVE_VIP') => Promise<boolean>;
+  manageMemberAPI: (eventId: string, targetOpenid: string | undefined, targetNickName: string, action: 'SET_ADMIN' | 'REMOVE_ADMIN' | 'KICK_MEMBER' | 'SET_VIP' | 'REMOVE_VIP', targetParticipantId?: string) => Promise<boolean>;
 
   // 🚨 新增：全局更新用户资料 API 定义
   updateUserProfileAPI: (nickName?: string, avatarUrl?: string) => Promise<boolean>;
@@ -247,23 +255,19 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   updateEventAPI: async (eventId: string, updates: Partial<Event>) => {
-    set((state) => {
-      const updatedEvents = state.events.map((e) =>
-        e.id === eventId ? ({ ...e, ...updates, updatedAt: new Date().toISOString() } as Event) : e
-      );
-      const nextCurrent = state.currentEvent?.id === eventId
-        ? ({ ...state.currentEvent, ...updates, updatedAt: new Date().toISOString() } as Event)
-        : state.currentEvent;
-      return { events: updatedEvents, currentEvent: nextCurrent };
-    });
-    Taro.setStorageSync('events', get().events);
-
     try {
       const result = await requestAPI(`/events/${eventId}`, 'PUT', updates);
-      return !!result?.success;
+      if (!result?.success || !result.data) return false;
+      const updatedEvent = result.data as Event;
+      set((state) => ({
+        events: state.events.map((e) => e.id === eventId ? updatedEvent : e),
+        currentEvent: state.currentEvent?.id === eventId ? updatedEvent : state.currentEvent
+      }));
+      Taro.setStorageSync('events', get().events);
+      return true;
     } catch (error) {
       console.error('Update event error:', error);
-      return false; // 本地已更新，返回 false 仅代表云端同步失败
+      return false;
     }
   },
 
@@ -320,15 +324,16 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const slotsArray = Array.isArray(slots) ? slots : [slots];
 
-      // 🚨 核心魔术：降维压缩！将数组用逗号拼接，伪装成单个 confirmedSlot 对象绕过后端的结构限制
       const packedSlot = {
         date: slotsArray.map(s => s.date).join(','),
         startTime: slotsArray.map(s => s.startTime || '').join(','),
         endTime: slotsArray.map(s => s.endTime || '').join(',')
       };
 
-      // 🚨 注意：传给后端的字段名必须是原版的 confirmedSlot
-      const result = await requestAPI(`/events/${eventId}/confirm`, 'POST', { confirmedSlot: packedSlot });
+      const result = await requestAPI(`/events/${eventId}/confirm`, 'POST', {
+        confirmedSlots: slotsArray,
+        confirmedSlot: packedSlot
+      });
 
       if (result && result.success) {
         await get().fetchEvents();
@@ -343,11 +348,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
-  manageMemberAPI: async (eventId, targetOpenid, targetNickName, action) => {
+  manageMemberAPI: async (eventId, targetOpenid, targetNickName, action, targetParticipantId) => {
     set({ loading: true });
     try {
       const result = await requestAPI(`/events/${eventId}/members`, 'POST', {
         targetOpenid,
+        targetParticipantId,
         targetNickName,
         action
       });

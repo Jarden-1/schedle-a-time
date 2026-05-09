@@ -505,9 +505,8 @@ export default function EventDetail() {
         // 🚨 核心魔术：升维解压！判断是否包含逗号，如果包含则切分还原为数组
         let confirmedSlotsList: any[] = [];
 
-        if ((event as any).confirmedSlots && Array.isArray((event as any).confirmedSlots)) {
-          // 兼容未来后端可能升级的真实数组字段
-          confirmedSlotsList = (event as any).confirmedSlots;
+        if (event.confirmedSlots && Array.isArray(event.confirmedSlots)) {
+          confirmedSlotsList = event.confirmedSlots;
         } else if (event.confirmedSlot && event.confirmedSlot.date) {
           const dates = event.confirmedSlot.date.split(',');
           const startTimes = event.confirmedSlot.startTime ? event.confirmedSlot.startTime.split(',') : [];

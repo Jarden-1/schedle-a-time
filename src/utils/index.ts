@@ -56,7 +56,7 @@ export const generateTimeSlots = (
     let currentMinutes = timeToMinutes(startTime);
     const endMinutes = timeToMinutes(endTime);
     
-    while (currentMinutes < endMinutes) {
+    while (currentMinutes + granularity <= endMinutes) {
       const slotStart = minutesToTime(currentMinutes);
       const slotEnd = minutesToTime(currentMinutes + granularity);
       slots.push(`${currentDate.format('YYYY-MM-DD')}_${slotStart}-${slotEnd}`);

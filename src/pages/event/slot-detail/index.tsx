@@ -96,13 +96,10 @@ export default function SlotDetail() {
     try {
       const keys = slotKey.split(',').sort();
 
-      const payload = (event.timeMode === 'date_only' || (event.timeMode as any) === 'DATE_ONLY')
-        ? { date: keys.join(','), startTime: '', endTime: '' }
-        : (() => {
-          const first = parseSlotKey(keys[0]);
-          const last = parseSlotKey(keys[keys.length - 1]);
-          return { date: first.date, startTime: first.startTime, endTime: last.endTime };
-        })();
+      const payload = keys.map(key => {
+        const { date, startTime, endTime } = parseSlotKey(key);
+        return { date, startTime, endTime: endTime || '' };
+      });
 
       const success = await confirmTimeAPI(event.id, payload);
 
