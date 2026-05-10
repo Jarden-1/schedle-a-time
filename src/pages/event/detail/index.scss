@@ -281,6 +281,16 @@
     }
   }
 
+  .inline-login-wrap {
+    margin-top: 14px;
+    padding: 0;
+
+    .login-card {
+      padding: 0;
+      border-radius: 0;
+    }
+  }
+
   .creator-actions {
     .decision-btn { margin-bottom: 12px; }
     .share-btn {

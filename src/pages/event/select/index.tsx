@@ -6,6 +6,7 @@ import { useAppStore } from '@/store';
 import { formatDate, generateTimeSlots, parseSlotKey } from '@/utils';
 import TimeGridSelector from '@/components/TimeGridSelector';
 import Loading from '@/components/Loading';
+import LoginCard from '@/components/LoginCard';
 import './index.scss';
 import guideGif from '@/assets/guide/time-select-guide.gif';
 
@@ -29,7 +30,15 @@ export default function SelectTime() {
   // 强制多选（父级控制子组件进入拖拽模式）
   const [forceDragMode, setForceDragMode] = useState(false);
 
-  const { events, updateAvailabilityAPI, getEventById, currentUser } = useAppStore();
+  const {
+    events,
+    updateAvailabilityAPI,
+    getEventById,
+    currentUser,
+    userNickName,
+    setCurrentUser,
+    setUserNickName
+  } = useAppStore();
 
   useLoad(async (options) => {
     const { id, nickname: nick, isProxy, proxy } = options as any;
@@ -252,6 +261,34 @@ export default function SelectTime() {
           <Button className="retry-btn" onClick={() => Taro.navigateBack()}>
             返回
           </Button>
+        </View>
+      </View>
+    );
+  }
+
+  if (!isProxyMode && !currentUser?.openid) {
+    return (
+      <View className="select-page">
+        <View className="select-login-card">
+          <LoginCard
+            title="请先登录后选择时间"
+            submitText="登录并继续选择"
+            initialNickName={nickname || userNickName || ''}
+            initialAvatarUrl={currentUser?.avatarUrl || ''}
+            onCancel={() => Taro.redirectTo({ url: `/pages/event/detail/index?id=${event.id}` })}
+            onSuccess={(user) => {
+              setCurrentUser({
+                id: user.id,
+                openid: user.openid,
+                nickName: user.nickName || '',
+                avatarUrl: user.avatarUrl || '',
+                avatarFileId: user.avatarFileId || ''
+              });
+              setUserNickName(user.nickName || '');
+              setNickname(user.nickName || '');
+              Taro.showToast({ title: '登录成功，可以选择时间了', icon: 'success' });
+            }}
+          />
         </View>
       </View>
     );

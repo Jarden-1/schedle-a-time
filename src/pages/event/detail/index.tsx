@@ -152,6 +152,32 @@ export default function EventDetail() {
     Taro.showShareMenu({ withShareTicket: true });
   };
 
+  const handleLoginSuccess = (user: any) => {
+    setCurrentUser({
+      id: user.id,
+      openid: user.openid,
+      nickName: user.nickName || '',
+      avatarUrl: user.avatarUrl || '',
+      avatarFileId: user.avatarFileId || ''
+    });
+    setUserNickName(user.nickName || '');
+    setMyNickname(user.nickName || '');
+    setShowLogin(false);
+
+    if (event) {
+      Taro.showToast({ title: '登录成功，正在进入选择页', icon: 'success' });
+      setTimeout(() => {
+        Taro.navigateTo({
+          url: `/pages/event/select/index?id=${event.id}&nickname=${encodeURIComponent(user.nickName || '')}`
+        });
+      }, 200);
+      return;
+    }
+
+    Taro.showToast({ title: '登录成功，正在加载活动', icon: 'success' });
+    setTimeout(() => loadEvent(eventId), 200);
+  };
+
   const handleSelectTime = async () => {
     if (!event) return;
 
@@ -165,7 +191,7 @@ export default function EventDetail() {
 
     setActionLoading(true);
     try {
-      if (!currentUser) {
+      if (!currentUser?.openid) {
         setShowLogin(true);
         return;
       }
@@ -258,6 +284,7 @@ export default function EventDetail() {
   const isCreator = !!(myOpenid && event?.creatorId && event.creatorId === myOpenid);
   const isAdmin = event?.adminIds?.includes(myOpenid || '');
   const canManage = isCreator || isAdmin;
+  const isLoggedIn = !!currentUser?.openid;
   const selfNick = (myNickname || userNickName).trim();
   // 🚨 终极修复：增加 OpenID 兜底匹配，防止后端 nickName 丢失导致匹配失败
   const hasSubmitted = !!event?.participants.some(p => {
@@ -302,19 +329,7 @@ export default function EventDetail() {
             initialNickName={userNickName || currentUser?.nickName || ''}
             initialAvatarUrl={currentUser?.avatarUrl || ''}
             onCancel={() => Taro.switchTab({ url: '/pages/index/index' })}
-            onSuccess={(user) => {
-              setCurrentUser({
-                id: user.id,
-                openid: user.openid,
-                nickName: user.nickName || '',
-                avatarUrl: user.avatarUrl || '',
-                avatarFileId: user.avatarFileId || ''
-              });
-              setUserNickName(user.nickName || '');
-              setShowLogin(false);
-              Taro.showToast({ title: '登录成功，正在加载活动', icon: 'success' });
-              setTimeout(() => loadEvent(eventId), 200);
-            }}
+            onSuccess={handleLoginSuccess}
           />
         </View>
       </View>
@@ -462,7 +477,19 @@ export default function EventDetail() {
 
       <View className="my-status-card">
         <Text className="card-title">我的参与</Text>
-        {isLocked ? (
+        {showLogin && !isLoggedIn ? (
+          <View className="inline-login-wrap">
+            <LoginCard
+              title="登录后选择空闲时间"
+              submitText="登录并继续选择"
+              initialNickName={userNickName || ''}
+              initialAvatarUrl={currentUser?.avatarUrl || ''}
+              showTips={false}
+              onCancel={() => setShowLogin(false)}
+              onSuccess={handleLoginSuccess}
+            />
+          </View>
+        ) : isLocked ? (
           <View className="status-content">
             <Text className="status-text">
               {hasSubmitted ? '✅ 已提交 (事件已锁定)' : '该事件已结束收集，无法继续填写'}
@@ -489,7 +516,7 @@ export default function EventDetail() {
               onClick={handleSelectTime}
               disabled={actionLoading}
             >
-              选择空闲时间
+              {isLoggedIn ? '选择空闲时间' : '登录并选择时间'}
             </Button>
           </View>
         )}
