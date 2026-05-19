@@ -266,7 +266,13 @@ export default function SelectTime() {
     );
   }
 
-  if (!isProxyMode && !currentUser?.openid) {
+  const hasCompleteProfile = !!(
+    currentUser?.openid &&
+    currentUser?.nickName?.trim() &&
+    currentUser?.avatarUrl
+  );
+
+  if (!isProxyMode && !hasCompleteProfile) {
     return (
       <View className="select-page">
         <View className="select-login-card">

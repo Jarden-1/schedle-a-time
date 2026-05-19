@@ -191,30 +191,18 @@ export default function EventDetail() {
 
     setActionLoading(true);
     try {
-      if (!currentUser?.openid) {
+      const hasCompleteProfile = !!(
+        currentUser?.openid &&
+        currentUser?.nickName?.trim() &&
+        currentUser?.avatarUrl
+      );
+
+      if (!hasCompleteProfile) {
         setShowLogin(true);
         return;
       }
 
-      const nickname = (myNickname || userNickName).trim();
-      if (!nickname) {
-        Taro.showModal({
-          title: '输入昵称',
-          content: '',
-          editable: true,
-          placeholderText: '请输入您的昵称',
-          success: (inputRes: any) => {
-            if (inputRes.confirm && inputRes.content?.trim()) {
-              const nick = inputRes.content.trim();
-              setMyNickname(nick);
-              Taro.navigateTo({
-                url: `/pages/event/select/index?id=${event.id}&nickname=${encodeURIComponent(nick)}`
-              });
-            }
-          }
-        } as any);
-        return;
-      }
+      const nickname = currentUser.nickName.trim();
 
       Taro.navigateTo({
         url: `/pages/event/select/index?id=${event.id}&nickname=${encodeURIComponent(nickname)}`
@@ -284,7 +272,11 @@ export default function EventDetail() {
   const isCreator = !!(myOpenid && event?.creatorId && event.creatorId === myOpenid);
   const isAdmin = event?.adminIds?.includes(myOpenid || '');
   const canManage = isCreator || isAdmin;
-  const isLoggedIn = !!currentUser?.openid;
+  const isLoggedIn = !!(
+    currentUser?.openid &&
+    currentUser?.nickName?.trim() &&
+    currentUser?.avatarUrl
+  );
   const selfNick = (myNickname || userNickName).trim();
   // 🚨 终极修复：增加 OpenID 兜底匹配，防止后端 nickName 丢失导致匹配失败
   const hasSubmitted = !!event?.participants.some(p => {
