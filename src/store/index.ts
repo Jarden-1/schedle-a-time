@@ -1,98 +1,8 @@
 import { create } from 'zustand';
 import Taro from '@tarojs/taro';
 import { Event, User, CreateEventForm, EventStatus } from '@/types';
-import { generateId } from '@/utils';
-
-// ==========================================
-// 🚨 核心配置：你的自建服务器地址
-// ==========================================
-// 本地开发用 localhost，部署到火山云后换成 https://你的域名/api
-export const BASE_URL = 'https://api.zhanghaoyang.cn/api';
-
-// 与 BASE_URL 同源的上传地址（收口配置，避免散落硬编码）
-export const UPLOAD_URL = `${BASE_URL}/upload`;
-
-type ApiMethod = 'GET' | 'POST' | 'PUT' | 'DELETE';
-
-let authRefreshPromise: Promise<User | null> | null = null;
-
-const requestRawAPI = async (endpoint: string, method: ApiMethod = 'GET', data: any = {}) => {
-  const token = Taro.getStorageSync('token') || '';
-  const res = await Taro.request({
-    url: `${BASE_URL}${endpoint}`,
-    method,
-    data,
-    header: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`
-    }
-  });
-
-  if (res.statusCode < 200 || res.statusCode >= 300) {
-    const errorMsg = (res.data as any)?.error || `请求失败 (${res.statusCode})`;
-    const apiError = new Error(errorMsg);
-    (apiError as any).statusCode = res.statusCode;
-    throw apiError;
-  }
-  return res.data; // 返回 { success, data, error } 格式
-};
-
-const refreshAuthSession = async (): Promise<User | null> => {
-  if (process.env.TARO_ENV !== 'weapp') return null;
-
-  if (!authRefreshPromise) {
-    authRefreshPromise = (async () => {
-      const { code } = await Taro.login();
-      if (!code) throw new Error('获取微信登录凭证失败');
-
-      const result = await requestRawAPI('/login', 'POST', { code });
-      if (!result?.success || !result?.data?.openid || !result?.data?.token) {
-        throw new Error('登录态刷新失败');
-      }
-
-      const { openid, token } = result.data;
-      Taro.setStorageSync('token', token);
-
-      const existingUser = Taro.getStorageSync('currentUser') || {};
-      const avatarUrl = existingUser.avatarUrl || existingUser.avatarFileId || '';
-      const user = {
-        ...existingUser,
-        id: openid,
-        openid,
-        avatarUrl,
-        avatarFileId: existingUser.avatarFileId || avatarUrl
-      } as User;
-      Taro.setStorageSync('currentUser', user);
-      return user;
-    })().finally(() => {
-      authRefreshPromise = null;
-    });
-  }
-
-  return authRefreshPromise;
-};
-
-// 封装原生的 Taro.request，替代旧的 callCloudFunction
-const requestAPI = async (endpoint: string, method: ApiMethod = 'GET', data: any = {}) => {
-  try {
-    return await requestRawAPI(endpoint, method, data);
-  } catch (error: any) {
-    if (error?.statusCode === 401 && endpoint !== '/login') {
-      Taro.removeStorageSync('token');
-      try {
-        const refreshedUser = await refreshAuthSession();
-        if (refreshedUser?.openid && Taro.getStorageSync('token')) {
-          return await requestRawAPI(endpoint, method, data);
-        }
-      } catch (refreshError) {
-        console.error('Refresh auth session error:', refreshError);
-      }
-    }
-
-    console.error(`Request ${endpoint} error:`, error);
-    throw error;
-  }
-};
+import { generateId, hasCompleteUserProfile, normalizeUser } from '@/utils';
+import { requestAPI, UPLOAD_URL } from '@/services/api';
 
 interface Slot {
   date: string;
@@ -141,25 +51,6 @@ interface AppState {
   tabIndex: number;
   setTabIndex: (index: number) => void;
 }
-
-const normalizeUser = (user: any): User | null => {
-  if (!user) return null;
-  const avatarUrl = user?.avatarUrl || '';
-  const avatarFileId = user?.avatarFileId || '';
-
-  const finalAvatarUrl =
-    typeof avatarUrl === 'string' && avatarUrl.trim() !== ''
-      ? avatarUrl
-      : typeof avatarFileId === 'string' && avatarFileId.trim() !== ''
-        ? avatarFileId
-        : '';
-
-  return {
-    ...user,
-    avatarUrl: finalAvatarUrl,
-    avatarFileId: avatarFileId || finalAvatarUrl
-  } as User;
-};
 
 const normalizeEventLoadError = (error: any): EventLoadError => {
   const statusCode = error?.statusCode;
@@ -281,7 +172,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const current = get().currentUser;
 
     // 🚨 核心拦截器：没有头像或昵称，返回需要登录的标识
-    if (!current || !current.avatarUrl || !current.nickName) {
+    if (!hasCompleteUserProfile(current)) {
       set({ loading: false });
       return 'NEED_LOGIN';
     }

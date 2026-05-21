@@ -4,14 +4,15 @@ import { useState } from 'react';
 import { CreateEventForm, TimeMode, TimeGranularity } from '@/types';
 import { snapTime, generateDateSlots, generateTimeSlots } from '@/utils';
 import { useAppStore } from '@/store';
+import { uploadAvatarToServer } from '@/services/avatar';
+import { buildUserProfile } from '@/utils';
 import './index.scss';
 
 const Input = TaroInput;
 const Textarea = TaroTextarea;
 
 export default function CreateEvent() {
-  // 🚨 引入 loginWithWeChat 和 setCurrentUser 以支持静默登录
-  const { createEventAPI, updateAvailabilityAPI, userNickName, setUserNickName, loading, loginWithWeChat, setCurrentUser, UPLOAD_URL } = useAppStore();
+  const { createEventAPI, updateAvailabilityAPI, userNickName, setUserNickName, loading, loginWithWeChat, setCurrentUser } = useAppStore();
 
   // 🚨 新增：控制弹窗和临时头像的状态
   const [showAvatarModal, setShowAvatarModal] = useState(false);
@@ -143,34 +144,14 @@ export default function CreateEvent() {
     try {
       Taro.showLoading({ title: '正在登录...' });
 
-      // 1. 先登录拿 token。上传接口已要求鉴权。
-      const userRes = await loginWithWeChat();
-      if (!userRes?.openid) throw new Error('登录失败');
+      let userOpenid = '';
+      const { fileId } = await uploadAvatarToServer(avatarPath, async () => {
+        const userRes = await loginWithWeChat();
+        if (!userRes?.openid) throw new Error('登录失败');
+        userOpenid = userRes.openid;
+      });
 
-      // 2. 压缩图片
-      const compressRes = await Taro.compressImage({ src: avatarPath, quality: 30 });
-      
-      // 3. 发送到服务器
-      const uploadRes = await Taro.uploadFile({
-        url: UPLOAD_URL, // 与 BASE_URL 同源的上传地址
-        filePath: compressRes.tempFilePath,
-        name: 'file',
-        header: {
-          Authorization: `Bearer ${Taro.getStorageSync('token') || ''}`
-        }
-      });
-      
-      const data = JSON.parse(uploadRes.data);
-      if (!data.success || !data.url) throw new Error('头像上传失败');
-      
-      // 4. 将最新用户信息存入 Store
-      setCurrentUser({
-        id: userRes.openid,
-        openid: userRes.openid,
-        nickName: form.creatorNickName, // 直接使用表单里刚填的昵称
-        avatarUrl: data.url,
-        avatarFileId: data.url
-      });
+      setCurrentUser(buildUserProfile(userOpenid, form.creatorNickName, fileId));
 
       Taro.hideLoading();
       setShowAvatarModal(false);

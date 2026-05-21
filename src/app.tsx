@@ -1,4 +1,3 @@
-import Taro, { useLaunch } from '@tarojs/taro'
 import './app.scss'
 
 interface AppProps {
@@ -6,10 +5,6 @@ interface AppProps {
 }
 
 function App({ children }: AppProps) {
-  useLaunch(() => {
-    console.log('App launched.')
-  })
-
   return children
 }
 

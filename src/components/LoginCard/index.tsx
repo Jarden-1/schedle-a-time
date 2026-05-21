@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import Taro from '@tarojs/taro';
 import { View, Text, Button, Image, Input } from '@tarojs/components';
 import { useAppStore } from '@/store';
+import { uploadAvatarToServer } from '@/services/avatar';
 
 import './index.scss';
 
@@ -26,7 +27,7 @@ export default function LoginCard({
   onSuccess,
   onCancel
 }: Props) {
-  const { loginWithWeChat, updateUserProfileAPI, UPLOAD_URL } = useAppStore();
+  const { loginWithWeChat, updateUserProfileAPI } = useAppStore();
 
   const [nickName, setNickName] = useState(initialNickName);
   const [avatarFileId, setAvatarFileId] = useState<string>(initialAvatarUrl);
@@ -44,46 +45,21 @@ export default function LoginCard({
       try {
         setSaving(true);
 
-        // 尽量复用“自建服务器上传”链路（与 profile/create 保持一致）
-        let filePath = tempPath;
-        try {
-          const compressRes = await Taro.compressImage({ src: tempPath, quality: 30 });
-          if (compressRes?.tempFilePath) {
-            filePath = compressRes.tempFilePath;
-          }
-        } catch {
-          // 非 weapp 或压缩失败时直接用原图
-        }
-
-        if (!Taro.getStorageSync('token')) {
+        const { fileId, previewUrl } = await uploadAvatarToServer(tempPath, async () => {
+          if (Taro.getStorageSync('token')) return;
           const userRes = await loginWithWeChat();
           if (!userRes?.openid) throw new Error('登录失败');
-        }
-
-        const uploadRes = await Taro.uploadFile({
-          url: UPLOAD_URL,
-          filePath,
-          name: 'file',
-          header: {
-            Authorization: `Bearer ${Taro.getStorageSync('token') || ''}`
-          }
         });
 
-        const data = JSON.parse((uploadRes as any).data || '{}');
-        if (!data?.success || !data?.url) {
-          throw new Error(data?.error || '上传失败');
-        }
-
-        const url = String(data.url);
-        setAvatarFileId(url);
-        setAvatarPreview(url);
+        setAvatarFileId(fileId);
+        setAvatarPreview(previewUrl);
       } catch (err: any) {
         Taro.showToast({ title: err.message || '头像处理失败', icon: 'none' });
       } finally {
         setSaving(false);
       }
     },
-    [loginWithWeChat, UPLOAD_URL]
+    [loginWithWeChat]
   );
 
   const handleSave = useCallback(async () => {

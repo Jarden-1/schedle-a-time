@@ -25,7 +25,6 @@ export default function Index() {
   const { events, fetchEvents, userNickName, setUserNickName, currentUser, setTabIndex, updateEventAPI, deleteEventAPI, manageMemberAPI } = useAppStore();
 
   useEffect(() => {
-    console.log('首页 useEffect 执行');
     setLoaded(true);
 
     const storedNickName = Taro.getStorageSync('userNickName');
@@ -34,7 +33,6 @@ export default function Index() {
     }
 
     fetchEvents()
-      .then(() => console.log('事件获取完成'))
       .catch((err) => console.error('获取事件失败', err));
   }, []);
 
@@ -247,8 +245,6 @@ export default function Index() {
       }
     });
   };
-
-  console.log('渲染页面', { loaded, eventsCount: localEvents.length, filteredCount: filteredEvents.length });
 
   return (
     <View className='index-page'>

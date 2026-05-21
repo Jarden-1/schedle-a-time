@@ -2,11 +2,12 @@ import Taro, { useDidShow } from '@tarojs/taro';
 import { View, Text, Button, Image, Input } from '@tarojs/components';
 import { useState, useMemo, useCallback, useRef } from 'react';
 import { useAppStore } from '@/store';
+import { uploadAvatarToServer } from '@/services/avatar';
+import { buildUserProfile, hasCompleteUserProfile } from '@/utils';
 import './index.scss';
 
 export default function Profile() {
-  // 🚨 1. 提取我们刚在 store 写的绝杀武器 updateUserProfileAPI
-  const { userNickName, setUserNickName, events, currentUser, setCurrentUser, setTabIndex, loginWithWeChat, fetchEvents, updateUserProfileAPI, UPLOAD_URL } = useAppStore();
+  const { userNickName, setUserNickName, events, currentUser, setCurrentUser, setTabIndex, loginWithWeChat, fetchEvents, updateUserProfileAPI } = useAppStore();
 
   useDidShow(() => {
     setTabIndex(1);
@@ -27,41 +28,18 @@ export default function Profile() {
   const avatarUploadPromiseRef = useRef<Promise<{ fileId: string; previewUrl: string }> | null>(null);
 
   const isProfileIncomplete = useMemo(() => {
-    const nickOk = !!(userNickName || currentUser?.nickName);
-    const avatarOk = !!currentUser?.avatarUrl;
-    return !(nickOk && avatarOk);
-  }, [currentUser?.avatarUrl, currentUser?.nickName, userNickName]);
+    return !hasCompleteUserProfile(currentUser, userNickName);
+  }, [currentUser?.avatarUrl, currentUser?.nickName, currentUser?.openid, userNickName]);
 
   const uploadAvatarToCloud = useCallback(
     async (tempPath: string) => {
-      if (!Taro.getStorageSync('token')) {
+      return uploadAvatarToServer(tempPath, async () => {
+        if (Taro.getStorageSync('token')) return;
         const userRes = await loginWithWeChat();
         if (!userRes?.openid) throw new Error('登录失败');
-      }
-
-      // 🚨 第 1 道防线：Taro 原生压缩图片，极大降低服务器压力
-      const compressRes = await Taro.compressImage({
-        src: tempPath,
-        quality: 30
       });
-      const compressedPath = compressRes.tempFilePath;
-
-      // 🚨 第 2 道防线：发往本地/自建 Node.js 服务器
-      const uploadRes = await Taro.uploadFile({
-        url: UPLOAD_URL, // 与 BASE_URL 同源的上传地址
-        filePath: compressedPath,
-        name: 'file',
-        header: {
-          Authorization: `Bearer ${Taro.getStorageSync('token') || ''}`
-        }
-      });
-
-      const data = JSON.parse(uploadRes.data);
-      if (!data.success || !data.url) throw new Error('上传服务器失败');
-
-      return { fileId: data.url, previewUrl: data.url };
     },
-    [loginWithWeChat, UPLOAD_URL]
+    [loginWithWeChat]
   );
 
   const resetPendingProfile = useCallback(() => {
@@ -143,23 +121,12 @@ export default function Profile() {
           throw new Error('连接服务器登录失败，请检查网络');
         }
 
-        // 3. 把拿到 openid 和 头像、昵称，一起存入本地全局状态
-        setCurrentUser({
-          id: userRes.openid,
-          openid: userRes.openid,
-          nickName: nick,
-          avatarUrl: finalFileId, // 头像是后端上传返回的 URL
-          avatarFileId: finalFileId
-        });
+        setCurrentUser(buildUserProfile(userRes.openid, nick, finalFileId));
         setUserNickName(nick);
 
         setShowNicknameModal(false);
         resetPendingProfile();
 
-        // 🚨 增加核心排查日志：打印最终拿到的头像链接
-        console.log('🚨 [调试探头] 最终存入的头像链接是:', finalFileId);
-
-        // 🚨 4. 闭环绝杀：同步将新头像和新昵称发给云端，更新该用户参与过的所有历史活动！
         await updateUserProfileAPI(nick, finalFileId);
 
         // 恢复正常的提示语

@@ -3,10 +3,11 @@ import { View, Text, Button, Image, Picker } from '@tarojs/components';
 import { useState, useCallback, useEffect } from 'react';
 import { Event, EventStatus } from '@/types';
 import { useAppStore } from '@/store';
-import { formatDate, formatTime, generateShareInfo } from '@/utils';
+import { buildUserProfile, formatDate, formatTime, generateShareInfo, hasCompleteUserProfile } from '@/utils';
 import Loading from '@/components/Loading';
 import EmptyState from '@/components/EmptyState';
 import LoginCard from '@/components/LoginCard';
+import { getEventStatus, getMergedConfirmedSlots, isEventLocked } from './helpers';
 import './index.scss';
 
 export default function EventDetail() {
@@ -153,13 +154,7 @@ export default function EventDetail() {
   };
 
   const handleLoginSuccess = (user: any) => {
-    setCurrentUser({
-      id: user.id,
-      openid: user.openid,
-      nickName: user.nickName || '',
-      avatarUrl: user.avatarUrl || '',
-      avatarFileId: user.avatarFileId || ''
-    });
+    setCurrentUser(buildUserProfile(user.openid || user.id, user.nickName || '', user.avatarUrl || user.avatarFileId || ''));
     setUserNickName(user.nickName || '');
     setMyNickname(user.nickName || '');
     setShowLogin(false);
@@ -181,23 +176,14 @@ export default function EventDetail() {
   const handleSelectTime = async () => {
     if (!event) return;
 
-    // 🚨 核心拦截逻辑：确认后不允许再改！
-    // 🚨 修复：无视大小写判断状态
-    const statusStr = String(event.status).toUpperCase();
-    if (statusStr === 'CLOSED' || statusStr === 'CONFIRMED') {
+    if (isEventLocked(event)) {
       Taro.showToast({ title: '该事件已锁定收集，无法修改', icon: 'none' });
       return;
     }
 
     setActionLoading(true);
     try {
-      const hasCompleteProfile = !!(
-        currentUser?.openid &&
-        currentUser?.nickName?.trim() &&
-        currentUser?.avatarUrl
-      );
-
-      if (!hasCompleteProfile) {
+      if (!hasCompleteUserProfile(currentUser)) {
         setShowLogin(true);
         return;
       }
@@ -272,11 +258,7 @@ export default function EventDetail() {
   const isCreator = !!(myOpenid && event?.creatorId && event.creatorId === myOpenid);
   const isAdmin = event?.adminIds?.includes(myOpenid || '');
   const canManage = isCreator || isAdmin;
-  const isLoggedIn = !!(
-    currentUser?.openid &&
-    currentUser?.nickName?.trim() &&
-    currentUser?.avatarUrl
-  );
+  const isLoggedIn = hasCompleteUserProfile(currentUser);
   const selfNick = (myNickname || userNickName).trim();
   // 🚨 终极修复：增加 OpenID 兜底匹配，防止后端 nickName 丢失导致匹配失败
   const hasSubmitted = !!event?.participants.some(p => {
@@ -363,9 +345,9 @@ export default function EventDetail() {
     );
   }
 
-  // 🚨 核心防御：强制将后端返回的 status 转为大写，彻底消灭大小写不匹配导致的 Bug！
-  const normalizedStatus = event ? String(event.status).toUpperCase() : '';
-  const isLocked = normalizedStatus === 'CLOSED' || normalizedStatus === 'CONFIRMED';
+  const normalizedStatus = getEventStatus(event);
+  const isLocked = isEventLocked(event);
+  const mergedConfirmedSlots = getMergedConfirmedSlots(event);
 
   return (
     <View className="detail-page">
@@ -552,54 +534,10 @@ export default function EventDetail() {
         </View>
       ) : null}
 
-      {/* 🚨 核心重构：兼容多行确认时间，只要是 CONFIRMED 状态就尝试渲染 */}
-      {normalizedStatus === 'CONFIRMED' ? (() => {
-        // 🚨 核心魔术：升维解压！判断是否包含逗号，如果包含则切分还原为数组
-        let confirmedSlotsList: any[] = [];
-
-        if (event.confirmedSlots && Array.isArray(event.confirmedSlots)) {
-          confirmedSlotsList = event.confirmedSlots;
-        } else if (event.confirmedSlot && event.confirmedSlot.date) {
-          const dates = event.confirmedSlot.date.split(',');
-          const startTimes = event.confirmedSlot.startTime ? event.confirmedSlot.startTime.split(',') : [];
-          const endTimes = event.confirmedSlot.endTime ? event.confirmedSlot.endTime.split(',') : [];
-
-          confirmedSlotsList = dates.map((d, i) => ({
-            date: d,
-            startTime: startTimes[i] || '',
-            endTime: endTimes[i] || ''
-          }));
-        }
-
-        // 🚨 终极体验：连续时段智能缝合！
-        const mergedConfirmedSlots: any[] = [];
-        if (confirmedSlotsList.length > 0) {
-          // 先确保按日期和时间排序
-          const sortedSlots = [...confirmedSlotsList].sort((a, b) => {
-            if (a.date !== b.date) return a.date.localeCompare(b.date);
-            return a.startTime.localeCompare(b.startTime);
-          });
-
-          let current = { ...sortedSlots[0] };
-          for (let i = 1; i < sortedSlots.length; i++) {
-            const next = sortedSlots[i];
-            // 如果是同一天，且当前结束时间严格等于下一个的开始时间，则吸收合并
-            if (current.date === next.date && current.endTime === next.startTime) {
-              current.endTime = next.endTime;
-            } else {
-              mergedConfirmedSlots.push(current);
-              current = { ...next };
-            }
-          }
-          mergedConfirmedSlots.push(current);
-        }
-
-        // 如果连一条数据都没有（极端异常情况），仍然渲染卡片但只给撤销按钮，防止彻底死锁
-        return (
+      {normalizedStatus === 'CONFIRMED' ? (
           <View className="confirmed-card">
             <Text className="card-title">🎉 最终确认时间</Text>
 
-            {/* 🚨 替换为渲染缝合后的 mergedConfirmedSlots */}
             {mergedConfirmedSlots.length > 0 ? (
               <View className="confirmed-time-list">
                 {mergedConfirmedSlots.map((slot: any, idx: number) => {
@@ -632,8 +570,7 @@ export default function EventDetail() {
               </Button>
             ) : null}
           </View>
-        );
-      })() : null}
+      ) : null}
 
       {!canManage && event.allowInvite ? (
         <View className="share-section">

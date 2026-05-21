@@ -3,10 +3,11 @@ import { View, Text, Button, ScrollView, Image } from '@tarojs/components';
 import { useState, useMemo, useCallback } from 'react';
 import { Event, TimeMode } from '@/types';
 import { useAppStore } from '@/store';
-import { formatDate, generateTimeSlots, parseSlotKey } from '@/utils';
+import { buildUserProfile, formatDate, generateTimeSlots, hasCompleteUserProfile, parseSlotKey } from '@/utils';
 import TimeGridSelector from '@/components/TimeGridSelector';
 import Loading from '@/components/Loading';
 import LoginCard from '@/components/LoginCard';
+import { findParticipantForSelection, getSubmitNickName, isProxyRoute } from './helpers';
 import './index.scss';
 import guideGif from '@/assets/guide/time-select-guide.gif';
 
@@ -41,13 +42,8 @@ export default function SelectTime() {
   } = useAppStore();
 
   useLoad(async (options) => {
-    const { id, nickname: nick, isProxy, proxy } = options as any;
-
-    const proxyMode =
-      isProxy === '1' ||
-      isProxy === 'true' ||
-      proxy === '1' ||
-      proxy === 'true';
+    const { id, nickname: nick } = options as any;
+    const proxyMode = isProxyRoute(options);
     setIsProxyMode(!!proxyMode);
 
     // 先从本地查找，同时异步获取云端最新数据
@@ -174,11 +170,10 @@ export default function SelectTime() {
   const handleSubmit = async () => {
     if (!event) return;
 
-    // 强制获取最终身份，防止空名字提交
-    const finalNickname = nickname || currentUser?.nickName || Taro.getStorageSync('userNickName');
-    
+    const finalNickname = getSubmitNickName({ isProxyMode, nickname, currentUser });
+
     if (!finalNickname) {
-      Taro.showToast({ title: '身份信息丢失，请退回重试', icon: 'none' });
+      Taro.showToast({ title: isProxyMode ? '请填写代填昵称' : '请先完成登录资料', icon: 'none' });
       return;
     }
 
@@ -198,10 +193,10 @@ export default function SelectTime() {
       console.log('用户拒绝订阅、环境不支持或请求超时', err);
     }
 
-    // 🚨 核心修复：代填模式下，必须严格根据昵称匹配，禁止读取 currentUser.openid
-    const existingParticipant = event.participants.find((p) => {
-      if (isProxyMode) return p.nickName === finalNickname;
-      return p.openid === currentUser?.openid || p.nickName === finalNickname;
+    const existingParticipant = findParticipantForSelection(event, {
+      isProxyMode,
+      nickname: finalNickname,
+      currentUser
     });
     const isUpdate = !!(
       existingParticipant &&
@@ -266,13 +261,7 @@ export default function SelectTime() {
     );
   }
 
-  const hasCompleteProfile = !!(
-    currentUser?.openid &&
-    currentUser?.nickName?.trim() &&
-    currentUser?.avatarUrl
-  );
-
-  if (!isProxyMode && !hasCompleteProfile) {
+  if (!isProxyMode && !hasCompleteUserProfile(currentUser)) {
     return (
       <View className="select-page">
         <View className="select-login-card">
@@ -283,13 +272,7 @@ export default function SelectTime() {
             initialAvatarUrl={currentUser?.avatarUrl || ''}
             onCancel={() => Taro.redirectTo({ url: `/pages/event/detail/index?id=${event.id}` })}
             onSuccess={(user) => {
-              setCurrentUser({
-                id: user.id,
-                openid: user.openid,
-                nickName: user.nickName || '',
-                avatarUrl: user.avatarUrl || '',
-                avatarFileId: user.avatarFileId || ''
-              });
+              setCurrentUser(buildUserProfile(user.openid || user.id, user.nickName || '', user.avatarUrl || user.avatarFileId || ''));
               setUserNickName(user.nickName || '');
               setNickname(user.nickName || '');
               Taro.showToast({ title: '登录成功，可以选择时间了', icon: 'success' });
