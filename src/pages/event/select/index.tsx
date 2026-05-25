@@ -366,7 +366,7 @@ export default function SelectTime() {
             {fixedUnavailableKeys.size > 0 ? (
               <View className="legend-item">
                 <View className="legend-box legend-box--busy" />
-                <Text className="legend-text">常规避开</Text>
+                <Text className="legend-text">预设不可用</Text>
               </View>
             ) : null}
           </View>
@@ -375,7 +375,7 @@ export default function SelectTime() {
 
         <View className="pill-buttons">
           <View className="pill-btn pill-btn--primary" onClick={handleApplyWeeklyUnavailable}>
-            套用常规避开
+            套用预设
           </View>
           <View className="pill-btn" onClick={handleClear}>
             清空
