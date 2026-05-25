@@ -127,11 +127,117 @@
           box-sizing: border-box;
 
           &.selected { background: #07c160; border-color: #07c160; .slot-text { color: #fff; font-weight: 600; } }
+          &.fixed-busy:not(.selected) {
+            background: rgba(255, 77, 79, 0.1);
+            border-color: rgba(255, 77, 79, 0.35);
+          }
           &:active { opacity: 0.8; transform: scale(0.98); }
           .slot-text { font-size: 14px; color: #666; }
         }
       }
     }
+  }
+
+  .top-operation-panel {
+    background: #fff;
+    margin: 12px;
+    padding: 12px;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .top-operation-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .legend {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .legend-box {
+    width: 13px;
+    height: 13px;
+    border-radius: 4px;
+    border: 1px solid #ddd;
+
+    &--empty {
+      background: #fff;
+    }
+
+    &--selected {
+      background: rgba(7, 193, 96, 0.85);
+      border-color: rgba(7, 193, 96, 0.85);
+    }
+
+    &--busy {
+      background: rgba(255, 77, 79, 0.22);
+      border-color: rgba(255, 77, 79, 0.5);
+    }
+  }
+
+  .legend-text {
+    font-size: 12px;
+    color: #666;
+  }
+
+  .selection-count {
+    flex-shrink: 0;
+    font-size: 12px;
+    color: #07c160;
+    font-weight: 700;
+  }
+
+  .pill-buttons {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .pill-btn {
+    padding: 8px 12px;
+    font-size: 13px;
+    color: #333;
+    background: #f2f2f2;
+    border-radius: 999px;
+
+    &:active {
+      opacity: 0.85;
+    }
+
+    &--primary {
+      background: rgba(7, 193, 96, 0.1);
+      color: #07c160;
+      font-weight: 600;
+    }
+
+    &--active {
+      background: #07c160;
+      color: #fff;
+      font-weight: 600;
+      box-shadow: 0 2px 6px rgba(7, 193, 96, 0.3);
+    }
+  }
+
+  .weekly-hint {
+    display: block;
+    font-size: 12px;
+    color: #8a8a8a;
+    line-height: 1.45;
   }
 
   .footer {

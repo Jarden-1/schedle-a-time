@@ -16,29 +16,46 @@
 
 .custom-tab-bar__item {
   flex: 1;
-  height: 100%; /* 让 item 填满父级 52px 的内容区 */
+  height: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center; /* 完美垂直居中 */
-  gap: 4px; /* 图标和文字的间距 */
-  /* 注意：这里已经删掉了之前那个错误的 transform: translateY(6px) */
+  justify-content: center;
+  gap: 4px;
 }
 
-.custom-tab-bar__icon {
-  width: 25px; /* 图标稍微调大一点点，更好看 */
+.custom-tab-bar__icon-wrap {
+  position: relative;
+  width: 25px;
   height: 25px;
 }
 
+.custom-tab-bar__icon {
+  width: 25px;
+  height: 25px;
+}
+
+.custom-tab-bar__dot {
+  position: absolute;
+  top: -2px;
+  right: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ff4d4f;
+  border: 2px solid #fff;
+  box-sizing: border-box;
+}
+
 .custom-tab-bar__text {
-  font-size: 12px; /* 文字稍微改精致一点 */
+  font-size: 12px;
   line-height: 1.2;
   color: #999999;
 }
 
 .custom-tab-bar__item.is-active {
   .custom-tab-bar__text {
-    color: #07c160; /* 微信绿 */
+    color: #07c160;
     font-weight: 600;
   }
 }

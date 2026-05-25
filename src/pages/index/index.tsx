@@ -22,7 +22,18 @@ export default function Index() {
   const [activeTab, setActiveTab] = useState<TabKey>('all');
   const [loaded, setLoaded] = useState(false);
   const [localEvents, setLocalEvents] = useState<Event[]>([]);
-  const { events, fetchEvents, userNickName, setUserNickName, currentUser, setTabIndex, updateEventAPI, deleteEventAPI, manageMemberAPI } = useAppStore();
+  const {
+    events,
+    fetchEvents,
+    userNickName,
+    setUserNickName,
+    currentUser,
+    setTabIndex,
+    updateEventAPI,
+    deleteEventAPI,
+    manageMemberAPI,
+    fetchLatestAnnouncementAPI
+  } = useAppStore();
 
   useEffect(() => {
     setLoaded(true);
@@ -45,6 +56,7 @@ export default function Index() {
       Taro.removeStorageSync('indexActiveTab');
     }
     fetchEvents().catch((err) => console.error('首页 useDidShow 刷新失败', err));
+    fetchLatestAnnouncementAPI().catch((err) => console.error('首页公告状态刷新失败', err));
   });
 
   useEffect(() => {

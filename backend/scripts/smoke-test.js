@@ -1,9 +1,11 @@
 const http = require('http');
+const https = require('https');
 
 const baseUrl = process.env.SMOKE_BASE_URL || 'http://127.0.0.1:3000';
 
 const request = (method, path) => new Promise((resolve, reject) => {
-  const req = http.request(`${baseUrl}${path}`, { method }, (res) => {
+  const client = baseUrl.startsWith('https:') ? https : http;
+  const req = client.request(`${baseUrl}${path}`, { method }, (res) => {
     let body = '';
     res.on('data', chunk => { body += chunk; });
     res.on('end', () => resolve({ statusCode: res.statusCode, body }));
@@ -24,6 +26,7 @@ const expectStatus = async (method, path, expected) => {
   await expectStatus('GET', '/api/events', 401);
   await expectStatus('POST', '/api/upload', 401);
   await expectStatus('POST', '/api/login', 400);
+  await expectStatus('GET', '/api/announcement/latest', 200);
 })().catch((err) => {
   console.error(err.message);
   process.exit(1);

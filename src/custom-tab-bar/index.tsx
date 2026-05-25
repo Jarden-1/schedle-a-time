@@ -12,8 +12,12 @@ const tabs: TabItem[] = [
 ];
 
 export default function CustomTabBar() {
-  // 🔑 核心魔法：直接监听全局 store 里的 tabIndex
-  const { tabIndex, setTabIndex } = useAppStore();
+  const {
+    tabIndex,
+    setTabIndex,
+    hasUnreadAnnouncement,
+    markAnnouncementRead
+  } = useAppStore();
 
   return (
     <View className="custom-tab-bar">
@@ -24,12 +28,18 @@ export default function CustomTabBar() {
             key={tab.key}
             className={`custom-tab-bar__item ${active ? 'is-active' : ''}`}
             onClick={() => {
+              if (tab.key === 'profile' && hasUnreadAnnouncement) {
+                markAnnouncementRead();
+              }
               if (active) return;
-              setTabIndex(idx); // 先更新全局状态司令部
-              Taro.switchTab({ url: tab.pagePath }); // 再执行跳转
+              setTabIndex(idx);
+              Taro.switchTab({ url: tab.pagePath });
             }}
           >
-            <Image className="custom-tab-bar__icon" src={active ? tab.iconActive : tab.icon} mode="aspectFit" />
+            <View className="custom-tab-bar__icon-wrap">
+              <Image className="custom-tab-bar__icon" src={active ? tab.iconActive : tab.icon} mode="aspectFit" />
+              {tab.key === 'profile' && hasUnreadAnnouncement ? <View className="custom-tab-bar__dot" /> : null}
+            </View>
             <Text className="custom-tab-bar__text">{tab.text}</Text>
           </View>
         );

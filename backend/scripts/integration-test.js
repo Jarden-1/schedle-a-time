@@ -1,5 +1,6 @@
 require('dotenv').config();
 const http = require('http');
+const https = require('https');
 const jwt = require('jsonwebtoken');
 
 const baseUrl = process.env.SMOKE_BASE_URL || 'http://127.0.0.1:3000';
@@ -19,7 +20,8 @@ const request = (method, path, token, body) => new Promise((resolve, reject) => 
     headers['Content-Length'] = Buffer.byteLength(payload);
   }
 
-  const req = http.request(`${baseUrl}${path}`, { method, headers }, (res) => {
+  const client = baseUrl.startsWith('https:') ? https : http;
+  const req = client.request(`${baseUrl}${path}`, { method, headers }, (res) => {
     let raw = '';
     res.on('data', chunk => { raw += chunk; });
     res.on('end', () => {
@@ -81,6 +83,23 @@ const cleanup = async () => {
     await expectStatus('POST', `/api/events/${eventId}/confirm`, otherToken, {
       confirmedSlots: [{ date: '2026-05-09', startTime: '09:00', endTime: '09:30' }]
     }, 403);
+
+    const preferenceRes = await expectStatus('PUT', '/api/user/weekly-unavailable', ownerToken, {
+      weeklyUnavailableSlots: ['1_09:00-09:30', '1_09:30-10:00'],
+      autoApplyWeeklyUnavailable: true
+    }, 200);
+    if (preferenceRes.data?.data?.weeklyUnavailableSlots?.length !== 2) {
+      throw new Error('weekly unavailable slots were not persisted');
+    }
+
+    const preferenceGetRes = await expectStatus('GET', '/api/user/weekly-unavailable', ownerToken, undefined, 200);
+    if (preferenceGetRes.data?.data?.weeklyUnavailableSlots?.[0] !== '1_09:00-09:30') {
+      throw new Error('weekly unavailable slots were not loaded');
+    }
+
+    await expectStatus('PUT', '/api/user/weekly-unavailable', ownerToken, {
+      weeklyUnavailableSlots: ['9_99:00-99:30']
+    }, 400);
 
     const renameRes = await expectStatus('POST', `/api/events/${eventId}/members`, ownerToken, {
       action: 'RENAME_MEMBER',

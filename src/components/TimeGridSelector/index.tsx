@@ -19,6 +19,9 @@ type Props = {
   readonlyMode?: boolean; // 如果为 true，彻底禁用拖拽和点击
   heatmapData?: Record<string, number>; // 传入每个 slotKey 的匹配率 (0 ~ 1)
   heatmapCountData?: Record<string, number>;
+  selectedTone?: 'green' | 'red';
+  hintedKeys?: Set<string>;
+  showHeaderDate?: boolean;
 };
 
 export default function TimeGridSelector(props: Props) {
@@ -32,7 +35,10 @@ export default function TimeGridSelector(props: Props) {
     forceDragMode = false,
     readonlyMode,
     heatmapData,
-    heatmapCountData
+    heatmapCountData,
+    selectedTone = 'green',
+    hintedKeys,
+    showHeaderDate = true
   } = props;
 
   const wrapperId = useMemo(() => `time-grid-${Math.random().toString(36).slice(2)}`, []);
@@ -359,7 +365,7 @@ export default function TimeGridSelector(props: Props) {
               const week = weekNames[new Date(Number(yy), Number(mm) - 1, Number(dd)).getDay()];
               return (
                 <View key={d} className="time-grid-header-cell">
-                  <View className="time-grid-header-date">{monthDay}</View>
+                  {showHeaderDate ? <View className="time-grid-header-date">{monthDay}</View> : null}
                   <View className="time-grid-header-week">{week}</View>
                 </View>
               );
@@ -380,6 +386,7 @@ export default function TimeGridSelector(props: Props) {
                 {Array.from({ length: gridSize.cols }).map((__, c) => {
                   const key = cellKeyByPos[r]?.[c] ?? null;
                   const isSelected = key ? renderSelected.has(key) : false;
+                  const isHinted = key ? hintedKeys?.has(key) : false;
 
                   // 计算热力颜色
                   let cellStyle: any = {};
@@ -396,13 +403,23 @@ export default function TimeGridSelector(props: Props) {
                   }
 
                   // 🚨 修复：选中态的外观必须追加到 style 中，避免被热力图内联背景覆盖
-                  if (isSelected && !readonlyMode) {
+                  if (isHinted && !isSelected) {
                     cellStyle = {
                       ...cellStyle,
-                      backgroundColor: 'rgba(7, 193, 96, 0.25)',
-                      borderRightColor: 'rgba(7, 193, 96, 0.2)',
-                      borderBottomColor: 'rgba(7, 193, 96, 0.2)',
-                      boxShadow: 'inset 0 0 0 2px rgba(7, 193, 96, 0.8)'
+                      backgroundColor: 'rgba(255, 77, 79, 0.12)',
+                      borderRightColor: 'rgba(255, 77, 79, 0.18)',
+                      borderBottomColor: 'rgba(255, 77, 79, 0.18)'
+                    };
+                  }
+
+                  if (isSelected && !readonlyMode) {
+                    const isRed = selectedTone === 'red';
+                    cellStyle = {
+                      ...cellStyle,
+                      backgroundColor: isRed ? 'rgba(255, 77, 79, 0.28)' : 'rgba(7, 193, 96, 0.25)',
+                      borderRightColor: isRed ? 'rgba(255, 77, 79, 0.25)' : 'rgba(7, 193, 96, 0.2)',
+                      borderBottomColor: isRed ? 'rgba(255, 77, 79, 0.25)' : 'rgba(7, 193, 96, 0.2)',
+                      boxShadow: isRed ? 'inset 0 0 0 2px rgba(255, 77, 79, 0.85)' : 'inset 0 0 0 2px rgba(7, 193, 96, 0.8)'
                     };
                   }
 
@@ -413,7 +430,7 @@ export default function TimeGridSelector(props: Props) {
                     <View
                       id={`${wrapperId}-cell-${r}-${c}`}
                       key={`${r}-${c}`}
-                      className={`time-grid-cell ${isSelected && !readonlyMode ? 'selected' : ''} ${count !== undefined && count > 0 ? 'has-count' : ''}`}
+                      className={`time-grid-cell ${isSelected && !readonlyMode ? `selected selected--${selectedTone}` : ''} ${isHinted ? 'hinted' : ''} ${count !== undefined && count > 0 ? 'has-count' : ''}`}
                       style={cellStyle}
                     >
                       {count !== undefined && count > 0 && (

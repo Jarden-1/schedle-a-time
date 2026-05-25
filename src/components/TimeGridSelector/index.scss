@@ -169,4 +169,14 @@
     box-shadow: none;
     z-index: 1;
   }
+
+  &.selected--red {
+    background: rgba(255, 77, 79, 0.28);
+    border-right-color: rgba(255, 77, 79, 0.25);
+    border-bottom-color: rgba(255, 77, 79, 0.25);
+  }
+
+  &.hinted:not(.selected) {
+    background: rgba(255, 77, 79, 0.12);
+  }
 }

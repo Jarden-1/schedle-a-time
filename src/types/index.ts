@@ -109,3 +109,17 @@ export interface CreateEventForm {
   isDecisionPublic: boolean;
   creatorNickName: string;
 }
+
+export interface WeeklyUnavailableSettings {
+  weeklyUnavailableSlots: string[];
+  autoApplyWeeklyUnavailable: boolean;
+}
+
+export interface Announcement {
+  id: string;
+  title: string;
+  content: string;
+  publishedAt: string;
+  actionText?: string;
+  actionPath?: string;
+}

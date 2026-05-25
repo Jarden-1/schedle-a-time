@@ -7,12 +7,25 @@ import { buildUserProfile, hasCompleteUserProfile } from '@/utils';
 import './index.scss';
 
 export default function Profile() {
-  const { userNickName, setUserNickName, events, currentUser, setCurrentUser, setTabIndex, loginWithWeChat, fetchEvents, updateUserProfileAPI } = useAppStore();
+  const {
+    userNickName,
+    setUserNickName,
+    events,
+    currentUser,
+    setCurrentUser,
+    setTabIndex,
+    loginWithWeChat,
+    fetchEvents,
+    updateUserProfileAPI,
+    fetchLatestAnnouncementAPI,
+    hasUnreadAnnouncement
+  } = useAppStore();
 
   useDidShow(() => {
     setTabIndex(1);
     // 🚨 核心修复：每次切到“我的”页面，强制从全局拉取最新数据，解决删除了数字不掉的 Bug！
     fetchEvents();
+    fetchLatestAnnouncementAPI();
   });
 
   const [showNicknameModal, setShowNicknameModal] = useState(false);
@@ -162,6 +175,8 @@ export default function Profile() {
           Taro.removeStorageSync('userNickName');
           // 2.3 修复：退出登录时同步清理 token
           Taro.removeStorageSync('token');
+          Taro.removeStorageSync('weeklyUnavailableSlots');
+          Taro.removeStorageSync('autoApplyWeeklyUnavailable');
 
           Taro.showToast({ title: '已退出登录', icon: 'success' });
         }
@@ -290,9 +305,29 @@ export default function Profile() {
       </View>
 
       <View className="menu-list">
+        <View className="menu-item" onClick={() => Taro.navigateTo({ url: '/pages/profile/weekly-unavailable/index' })}>
+          <View className="menu-main">
+            <Text className="menu-text">常规不可用时段</Text>
+            <Text className="menu-desc">维护每周需要避开的时间</Text>
+          </View>
+          <Text className="menu-arrow">〉</Text>
+        </View>
+        <View className="menu-item" onClick={() => Taro.navigateTo({ url: '/pages/profile/announcement/index' })}>
+          <View className="menu-main">
+            <View className="menu-title-row">
+              <Text className="menu-text">新功能与公告</Text>
+              {hasUnreadAnnouncement ? <View className="unread-dot" /> : null}
+            </View>
+            <Text className="menu-desc">查看最新功能更新</Text>
+          </View>
+          <Text className="menu-arrow">〉</Text>
+        </View>
         <Button openType="feedback" className="native-feedback-btn" hoverClass="none">
           <View className="menu-item">
-            <Text className="menu-text">💡 意见反馈</Text>
+            <View className="menu-main">
+              <Text className="menu-text">意见反馈</Text>
+              <Text className="menu-desc">告诉我们你的想法</Text>
+            </View>
             <Text className="menu-arrow">〉</Text>
           </View>
         </Button>

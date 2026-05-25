@@ -8,6 +8,7 @@ const jwt = require('jsonwebtoken');
 const path = require('path');
 const fs = require('fs');
 const Event = require('./models/Event');
+const UserPreference = require('./models/UserPreference');
 
 const app = express();
 app.use(cors());
@@ -96,6 +97,21 @@ const isValidDateString = (value) => {
 
 const isValidTimeString = (value) => {
   return typeof value === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
+};
+
+const isValidWeekTimeString = (value, allowEndOfDay = false) => {
+  if (allowEndOfDay && value === '24:00') return true;
+  return isValidTimeString(value);
+};
+
+const isValidWeeklySlotKey = (value) => {
+  if (typeof value !== 'string') return false;
+  const match = value.match(/^([0-6])_([0-2]\d:[0-5]\d)-([0-2]\d:[0-5]\d)$/);
+  if (!match) return false;
+  const [, , startTime, endTime] = match;
+  return isValidWeekTimeString(startTime) &&
+    isValidWeekTimeString(endTime, true) &&
+    startTime < endTime;
 };
 
 const validateEventInput = (payload, partial = false) => {
@@ -214,6 +230,15 @@ const getConfirmedSlotsForEvent = (event) => {
   return normalizeConfirmedSlots({ confirmedSlot: event.confirmedSlot });
 };
 
+const latestAnnouncement = {
+  id: '2026-05-25-weekly-unavailable',
+  title: '常规不可用时段上线',
+  content: '现在可以在「我的」里维护每周常规不可用时段。参与活动选择时间时，可一键套用并避开这些时段，仍然支持按本次情况手动调整。',
+  publishedAt: '2026-05-25T00:00:00.000Z',
+  actionText: '去设置',
+  actionPath: '/pages/profile/weekly-unavailable/index'
+};
+
 // ==========================================
 // 🛠️ 辅助函数：微信服务通知
 // ==========================================
@@ -327,6 +352,10 @@ app.post('/api/login', async (req, res) => {
     console.error('微信登录失败:', error.response?.data || error.message);
     res.status(502).json({ success: false, error: '微信登录服务暂时不可用' });
   }
+});
+
+app.get('/api/announcement/latest', (req, res) => {
+  res.json({ success: true, data: latestAnnouncement });
 });
 
 // ==========================================
@@ -644,6 +673,56 @@ app.post('/api/user/profile', verifyToken, async (req, res) => {
   } catch (error) {
     console.error('更新用户资料失败:', error);
     res.status(500).json({ success: false, error: '全局资料更新失败' });
+  }
+});
+
+app.get('/api/user/weekly-unavailable', verifyToken, async (req, res) => {
+  try {
+    const preference = await UserPreference.findOne({ openid: req.user.openid });
+    res.json({
+      success: true,
+      data: {
+        weeklyUnavailableSlots: preference?.weeklyUnavailableSlots || [],
+        autoApplyWeeklyUnavailable: preference?.autoApplyWeeklyUnavailable !== false
+      }
+    });
+  } catch (error) {
+    console.error('获取常规不可用时段失败:', error);
+    res.status(500).json({ success: false, error: '获取常规不可用时段失败' });
+  }
+});
+
+app.put('/api/user/weekly-unavailable', verifyToken, async (req, res) => {
+  try {
+    const weeklyUnavailableSlots = Array.isArray(req.body?.weeklyUnavailableSlots)
+      ? Array.from(new Set(req.body.weeklyUnavailableSlots))
+      : [];
+    const autoApplyWeeklyUnavailable = req.body?.autoApplyWeeklyUnavailable !== false;
+
+    if (weeklyUnavailableSlots.length > 336 || weeklyUnavailableSlots.some(slot => !isValidWeeklySlotKey(slot))) {
+      return res.status(400).json({ success: false, error: '常规不可用时段数据不合法' });
+    }
+
+    const preference = await UserPreference.findOneAndUpdate(
+      { openid: req.user.openid },
+      {
+        weeklyUnavailableSlots,
+        autoApplyWeeklyUnavailable,
+        updatedAt: new Date().toISOString()
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+
+    res.json({
+      success: true,
+      data: {
+        weeklyUnavailableSlots: preference.weeklyUnavailableSlots,
+        autoApplyWeeklyUnavailable: preference.autoApplyWeeklyUnavailable
+      }
+    });
+  } catch (error) {
+    console.error('保存常规不可用时段失败:', error);
+    res.status(500).json({ success: false, error: '保存常规不可用时段失败' });
   }
 });
 

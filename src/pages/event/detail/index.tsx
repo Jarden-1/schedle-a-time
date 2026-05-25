@@ -183,12 +183,13 @@ export default function EventDetail() {
 
     setActionLoading(true);
     try {
-      if (!hasCompleteUserProfile(currentUser)) {
+      const current = currentUser;
+      if (!current || !hasCompleteUserProfile(current)) {
         setShowLogin(true);
         return;
       }
 
-      const nickname = currentUser.nickName.trim();
+      const nickname = current.nickName.trim();
 
       Taro.navigateTo({
         url: `/pages/event/select/index?id=${event.id}&nickname=${encodeURIComponent(nickname)}`

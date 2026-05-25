@@ -7,7 +7,9 @@ export default defineAppConfig({
     'pages/event/select/index',
     'pages/event/decision/index',
     'pages/event/slot-detail/index',
-    'pages/profile/index'
+    'pages/profile/index',
+    'pages/profile/weekly-unavailable/index',
+    'pages/profile/announcement/index'
   ],
   window: {
     backgroundTextStyle: 'light',

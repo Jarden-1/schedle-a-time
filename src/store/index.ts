@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import Taro from '@tarojs/taro';
-import { Event, User, CreateEventForm, EventStatus } from '@/types';
+import { Announcement, Event, User, CreateEventForm, EventStatus, WeeklyUnavailableSettings } from '@/types';
 import { generateId, hasCompleteUserProfile, normalizeUser } from '@/utils';
 import { requestAPI, UPLOAD_URL } from '@/services/api';
 
@@ -42,6 +42,14 @@ interface AppState {
 
   // 🚨 新增：全局更新用户资料 API 定义
   updateUserProfileAPI: (nickName?: string, avatarUrl?: string) => Promise<boolean>;
+  weeklyUnavailableSlots: string[];
+  autoApplyWeeklyUnavailable: boolean;
+  fetchWeeklyUnavailableAPI: () => Promise<WeeklyUnavailableSettings | null>;
+  updateWeeklyUnavailableAPI: (weeklyUnavailableSlots: string[], autoApplyWeeklyUnavailable: boolean) => Promise<boolean>;
+  latestAnnouncement: Announcement | null;
+  hasUnreadAnnouncement: boolean;
+  fetchLatestAnnouncementAPI: () => Promise<Announcement | null>;
+  markAnnouncementRead: (announcementId?: string) => void;
 
   // 👇 新增这一行，告诉 TypeScript store 里有这个东西
   UPLOAD_URL: string;
@@ -67,6 +75,24 @@ const normalizeEventLoadError = (error: any): EventLoadError => {
     return { type: 'network', message: '网络连接失败，请检查网络后重试' };
   }
   return { type: 'unknown', statusCode, message: error?.message || '活动加载失败，请重试' };
+};
+
+const WEEKLY_UNAVAILABLE_ANNOUNCEMENT: Announcement = {
+  id: '2026-05-25-weekly-unavailable',
+  title: '常规不可用时段上线',
+  content: '现在可以在「我的」里维护每周常规不可用时段。进入活动选择时间时，可以一键套用并避开这些时段；如果某次活动临时可参加，也可以手动改回。',
+  publishedAt: '2026-05-25T00:00:00.000Z',
+  actionText: '去设置常规时段',
+  actionPath: '/pages/profile/weekly-unavailable/index'
+};
+
+const getFallbackAnnouncement = (): Announcement => {
+  return Taro.getStorageSync('latestAnnouncement') || WEEKLY_UNAVAILABLE_ANNOUNCEMENT;
+};
+
+const resolveAnnouncementReadState = (announcement: Announcement | null) => {
+  const readId = Taro.getStorageSync('lastReadAnnouncementId') || '';
+  return !!announcement?.id && announcement.id !== readId;
 };
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -172,7 +198,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const current = get().currentUser;
 
     // 🚨 核心拦截器：没有头像或昵称，返回需要登录的标识
-    if (!hasCompleteUserProfile(current)) {
+    if (!current || !hasCompleteUserProfile(current)) {
       set({ loading: false });
       return 'NEED_LOGIN';
     }
@@ -382,6 +408,92 @@ export const useAppStore = create<AppState>((set, get) => ({
       console.error('更新全局用户资料失败:', error);
       return false;
     }
+  },
+
+  weeklyUnavailableSlots: Taro.getStorageSync('weeklyUnavailableSlots') || [],
+  autoApplyWeeklyUnavailable: Taro.getStorageSync('autoApplyWeeklyUnavailable') !== false,
+  fetchWeeklyUnavailableAPI: async () => {
+    try {
+      const result = await requestAPI('/user/weekly-unavailable', 'GET');
+      if (!result?.success || !result.data) return null;
+      const settings = result.data as WeeklyUnavailableSettings;
+      const slots = Array.isArray(settings.weeklyUnavailableSlots) ? settings.weeklyUnavailableSlots : [];
+      const autoApply = settings.autoApplyWeeklyUnavailable !== false;
+      set({
+        weeklyUnavailableSlots: slots,
+        autoApplyWeeklyUnavailable: autoApply
+      });
+      Taro.setStorageSync('weeklyUnavailableSlots', slots);
+      Taro.setStorageSync('autoApplyWeeklyUnavailable', autoApply);
+      return { weeklyUnavailableSlots: slots, autoApplyWeeklyUnavailable: autoApply };
+    } catch (error) {
+      console.error('Fetch weekly unavailable error:', error);
+      return {
+        weeklyUnavailableSlots: Taro.getStorageSync('weeklyUnavailableSlots') || [],
+        autoApplyWeeklyUnavailable: Taro.getStorageSync('autoApplyWeeklyUnavailable') !== false
+      };
+    }
+  },
+
+  updateWeeklyUnavailableAPI: async (weeklyUnavailableSlots, autoApplyWeeklyUnavailable) => {
+    try {
+      const result = await requestAPI('/user/weekly-unavailable', 'PUT', {
+        weeklyUnavailableSlots,
+        autoApplyWeeklyUnavailable
+      });
+      if (!result?.success || !result.data) return false;
+      const slots = Array.isArray(result.data.weeklyUnavailableSlots) ? result.data.weeklyUnavailableSlots : [];
+      const autoApply = result.data.autoApplyWeeklyUnavailable !== false;
+      set({
+        weeklyUnavailableSlots: slots,
+        autoApplyWeeklyUnavailable: autoApply
+      });
+      Taro.setStorageSync('weeklyUnavailableSlots', slots);
+      Taro.setStorageSync('autoApplyWeeklyUnavailable', autoApply);
+      return true;
+    } catch (error) {
+      console.error('Update weekly unavailable error:', error);
+      set({
+        weeklyUnavailableSlots,
+        autoApplyWeeklyUnavailable
+      });
+      Taro.setStorageSync('weeklyUnavailableSlots', weeklyUnavailableSlots);
+      Taro.setStorageSync('autoApplyWeeklyUnavailable', autoApplyWeeklyUnavailable);
+      return true;
+    }
+  },
+
+  latestAnnouncement: getFallbackAnnouncement(),
+  hasUnreadAnnouncement: resolveAnnouncementReadState(getFallbackAnnouncement()),
+  fetchLatestAnnouncementAPI: async () => {
+    try {
+      const result = await requestAPI('/announcement/latest', 'GET');
+      const announcement = result?.success && result.data
+        ? result.data as Announcement
+        : getFallbackAnnouncement();
+      set({
+        latestAnnouncement: announcement,
+        hasUnreadAnnouncement: resolveAnnouncementReadState(announcement)
+      });
+      Taro.setStorageSync('latestAnnouncement', announcement);
+      return announcement;
+    } catch (error) {
+      console.error('Fetch latest announcement error:', error);
+      const announcement = getFallbackAnnouncement();
+      set({
+        latestAnnouncement: announcement,
+        hasUnreadAnnouncement: resolveAnnouncementReadState(announcement)
+      });
+      Taro.setStorageSync('latestAnnouncement', announcement);
+      return announcement;
+    }
+  },
+
+  markAnnouncementRead: (announcementId?: string) => {
+    const id = announcementId || get().latestAnnouncement?.id;
+    if (!id) return;
+    Taro.setStorageSync('lastReadAnnouncementId', id);
+    set({ hasUnreadAnnouncement: false });
   },
 
   getEventById: async (eventId: string) => {
