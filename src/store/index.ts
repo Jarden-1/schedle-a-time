@@ -156,6 +156,10 @@ export const useAppStore = create<AppState>((set, get) => ({
         }
       }
 
+      get().fetchWeeklyUnavailableAPI().catch((error) => {
+        console.error('Fetch weekly unavailable after login error:', error);
+      });
+
       return user;
     } catch (err) {
       console.error('自建服务器登录失败:', err);
@@ -460,13 +464,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       return true;
     } catch (error) {
       console.error('Update weekly unavailable error:', error);
-      set({
-        weeklyUnavailableSlots,
-        autoApplyWeeklyUnavailable
-      });
-      Taro.setStorageSync('weeklyUnavailableSlots', weeklyUnavailableSlots);
-      Taro.setStorageSync('autoApplyWeeklyUnavailable', autoApplyWeeklyUnavailable);
-      return true;
+      return false;
     }
   },
 
