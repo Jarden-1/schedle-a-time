@@ -48,8 +48,10 @@ interface AppState {
   updateWeeklyUnavailableAPI: (weeklyUnavailableSlots: string[], autoApplyWeeklyUnavailable: boolean) => Promise<boolean>;
   latestAnnouncement: Announcement | null;
   hasUnreadAnnouncement: boolean;
+  hasProfileTabAnnouncementDot: boolean;
   fetchLatestAnnouncementAPI: () => Promise<Announcement | null>;
   markAnnouncementRead: (announcementId?: string) => void;
+  dismissProfileTabAnnouncementDot: (announcementId?: string) => void;
 
   // 👇 新增这一行，告诉 TypeScript store 里有这个东西
   UPLOAD_URL: string;
@@ -93,6 +95,11 @@ const getFallbackAnnouncement = (): Announcement => {
 const resolveAnnouncementReadState = (announcement: Announcement | null) => {
   const readId = Taro.getStorageSync('lastReadAnnouncementId') || '';
   return !!announcement?.id && announcement.id !== readId;
+};
+
+const resolveProfileTabAnnouncementDotState = (announcement: Announcement | null) => {
+  const seenId = Taro.getStorageSync('lastSeenProfileTabAnnouncementId') || '';
+  return !!announcement?.id && announcement.id !== seenId;
 };
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -465,6 +472,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   latestAnnouncement: getFallbackAnnouncement(),
   hasUnreadAnnouncement: resolveAnnouncementReadState(getFallbackAnnouncement()),
+  hasProfileTabAnnouncementDot: resolveProfileTabAnnouncementDotState(getFallbackAnnouncement()),
   fetchLatestAnnouncementAPI: async () => {
     try {
       const result = await requestAPI('/announcement/latest', 'GET');
@@ -473,7 +481,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         : getFallbackAnnouncement();
       set({
         latestAnnouncement: announcement,
-        hasUnreadAnnouncement: resolveAnnouncementReadState(announcement)
+        hasUnreadAnnouncement: resolveAnnouncementReadState(announcement),
+        hasProfileTabAnnouncementDot: resolveProfileTabAnnouncementDotState(announcement)
       });
       Taro.setStorageSync('latestAnnouncement', announcement);
       return announcement;
@@ -482,7 +491,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       const announcement = getFallbackAnnouncement();
       set({
         latestAnnouncement: announcement,
-        hasUnreadAnnouncement: resolveAnnouncementReadState(announcement)
+        hasUnreadAnnouncement: resolveAnnouncementReadState(announcement),
+        hasProfileTabAnnouncementDot: resolveProfileTabAnnouncementDotState(announcement)
       });
       Taro.setStorageSync('latestAnnouncement', announcement);
       return announcement;
@@ -493,7 +503,15 @@ export const useAppStore = create<AppState>((set, get) => ({
     const id = announcementId || get().latestAnnouncement?.id;
     if (!id) return;
     Taro.setStorageSync('lastReadAnnouncementId', id);
-    set({ hasUnreadAnnouncement: false });
+    Taro.setStorageSync('lastSeenProfileTabAnnouncementId', id);
+    set({ hasUnreadAnnouncement: false, hasProfileTabAnnouncementDot: false });
+  },
+
+  dismissProfileTabAnnouncementDot: (announcementId?: string) => {
+    const id = announcementId || get().latestAnnouncement?.id;
+    if (!id) return;
+    Taro.setStorageSync('lastSeenProfileTabAnnouncementId', id);
+    set({ hasProfileTabAnnouncementDot: false });
   },
 
   getEventById: async (eventId: string) => {

@@ -15,8 +15,8 @@ export default function CustomTabBar() {
   const {
     tabIndex,
     setTabIndex,
-    hasUnreadAnnouncement,
-    markAnnouncementRead
+    hasProfileTabAnnouncementDot,
+    dismissProfileTabAnnouncementDot
   } = useAppStore();
 
   return (
@@ -28,8 +28,8 @@ export default function CustomTabBar() {
             key={tab.key}
             className={`custom-tab-bar__item ${active ? 'is-active' : ''}`}
             onClick={() => {
-              if (tab.key === 'profile' && hasUnreadAnnouncement) {
-                markAnnouncementRead();
+              if (tab.key === 'profile' && hasProfileTabAnnouncementDot) {
+                dismissProfileTabAnnouncementDot();
               }
               if (active) return;
               setTabIndex(idx);
@@ -38,7 +38,7 @@ export default function CustomTabBar() {
           >
             <View className="custom-tab-bar__icon-wrap">
               <Image className="custom-tab-bar__icon" src={active ? tab.iconActive : tab.icon} mode="aspectFit" />
-              {tab.key === 'profile' && hasUnreadAnnouncement ? <View className="custom-tab-bar__dot" /> : null}
+              {tab.key === 'profile' && hasProfileTabAnnouncementDot ? <View className="custom-tab-bar__dot" /> : null}
             </View>
             <Text className="custom-tab-bar__text">{tab.text}</Text>
           </View>
