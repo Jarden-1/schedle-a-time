@@ -202,6 +202,42 @@
     font-weight: 700;
   }
 
+  .preset-tip {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 9px 10px;
+    background: rgba(255, 77, 79, 0.06);
+    border: 1px solid rgba(255, 77, 79, 0.18);
+    border-radius: 8px;
+  }
+
+  .preset-tip__swatch {
+    width: 12px;
+    height: 12px;
+    margin-top: 3px;
+    border-radius: 4px;
+    background: rgba(255, 77, 79, 0.22);
+    border: 1px solid rgba(255, 77, 79, 0.5);
+    flex-shrink: 0;
+  }
+
+  .preset-tip__text {
+    flex: 1;
+    min-width: 0;
+    font-size: 12px;
+    color: #7a5555;
+    line-height: 1.5;
+  }
+
+  .preset-tip__close {
+    flex-shrink: 0;
+    font-size: 12px;
+    color: #07c160;
+    font-weight: 600;
+    line-height: 1.5;
+  }
+
   .pill-buttons {
     display: flex;
     gap: 8px;

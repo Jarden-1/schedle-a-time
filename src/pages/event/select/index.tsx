@@ -12,6 +12,7 @@ import './index.scss';
 import guideGif from '@/assets/guide/time-select-guide.gif';
 
 const TEMPLATE_ID = 'WENxWVN5m0myVwQAeA99G9ryFIhFHu5hcQFb1BLaSJU';
+const PRESET_UNAVAILABLE_TIP_KEY = 'guide_preset_unavailable_seen';
 
 export default function SelectTime() {
   const [event, setEvent] = useState<Event | null>(null);
@@ -23,10 +24,16 @@ export default function SelectTime() {
 
   const [showGuide, setShowGuide] = useState(false);
   const [fixedUnavailableKeys, setFixedUnavailableKeys] = useState<Set<string>>(new Set());
+  const [showPresetTip, setShowPresetTip] = useState(false);
 
   const closeGuide = () => {
     setShowGuide(false);
     Taro.setStorageSync('guide_time_grid_seen', true);
+  };
+
+  const closePresetTip = () => {
+    setShowPresetTip(false);
+    Taro.setStorageSync(PRESET_UNAVAILABLE_TIP_KEY, true);
   };
 
   // 强制多选（父级控制子组件进入拖拽模式）
@@ -132,6 +139,9 @@ export default function SelectTime() {
       ? mapWeeklyUnavailableToEventSlots(allKeys, settings?.weeklyUnavailableSlots || [])
       : new Set<string>();
     setFixedUnavailableKeys(unavailableKeys);
+    if (unavailableKeys.size > 0 && !Taro.getStorageSync(PRESET_UNAVAILABLE_TIP_KEY)) {
+      setShowPresetTip(true);
+    }
 
     if (target && Array.isArray(target.availableSlots) && target.availableSlots.length > 0) {
       setSelectedSlots(new Set(target.availableSlots));
@@ -192,6 +202,14 @@ export default function SelectTime() {
     });
     return Array.from(set).sort();
   }, [event, timeSlots]);
+
+  const actionHintText = useMemo(() => {
+    if (!event) return '';
+    if (event.timeMode !== TimeMode.TIME_SLOT) return '💡 点击方格选择您的空闲日期';
+    if (forceDragMode) return '✨ 页面已锁定。如需上下翻页，请先关闭连选';
+    const presetCopy = fixedUnavailableKeys.size > 0 ? '红色为预设不可用，默认未选；' : '';
+    return `💡 ${presetCopy}点击单选，长按或开启「连选」可滑动拖拽`;
+  }, [event, fixedUnavailableKeys.size, forceDragMode]);
 
   const toggleSlot = useCallback((slot: string) => {
     setSelectedSlots((prev) => {
@@ -345,9 +363,7 @@ export default function SelectTime() {
         <View className="subtitle">
           <Text className="event-title-highlight">{event.title}</Text>
           <View className={`action-hint ${forceDragMode ? 'action-hint--active' : ''}`}>
-            {event.timeMode === TimeMode.TIME_SLOT
-              ? (forceDragMode ? '✨ 页面已锁定。如需上下翻页，请先关闭连选' : '💡 点击单选，长按或开启底部「连选」可滑动拖拽')
-              : '💡 点击方格选择您的空闲日期'}
+            {actionHintText}
           </View>
         </View>
       </View>
@@ -372,6 +388,14 @@ export default function SelectTime() {
           </View>
           <Text className="selection-count">已选 {selectedSlots.size}</Text>
         </View>
+
+        {showPresetTip && fixedUnavailableKeys.size > 0 ? (
+          <View className="preset-tip">
+            <View className="preset-tip__swatch" />
+            <Text className="preset-tip__text">红色时段来自你的“常规不可用时段”，已默认不选；本次有空的话，直接点红色格子即可选回。</Text>
+            <Text className="preset-tip__close" onClick={closePresetTip}>知道了</Text>
+          </View>
+        ) : null}
 
         <View className="pill-buttons">
           <View className="pill-btn pill-btn--primary" onClick={handleApplyWeeklyUnavailable}>
