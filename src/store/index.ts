@@ -39,6 +39,8 @@ interface AppState {
   updateAvailabilityAPI: (eventId: string, nickName: string, availableSlots: string[], isProxy?: boolean) => Promise<boolean>;
   confirmTimeAPI: (eventId: string, slots: Slot | Slot[]) => Promise<boolean>;
   manageMemberAPI: (eventId: string, targetOpenid: string | undefined, targetNickName: string, action: 'SET_ADMIN' | 'REMOVE_ADMIN' | 'KICK_MEMBER' | 'SET_VIP' | 'REMOVE_VIP' | 'RENAME_MEMBER', targetParticipantId?: string, targetDisplayName?: string) => Promise<boolean>;
+  /** 普通参与者退出活动（只按自己的 openid 移除，不需要管理权限） */
+  leaveEventAPI: (eventId: string) => Promise<boolean>;
 
   // 🚨 新增：全局更新用户资料 API 定义
   updateUserProfileAPI: (nickName?: string, avatarUrl?: string) => Promise<boolean>;
@@ -400,6 +402,31 @@ export const useAppStore = create<AppState>((set, get) => ({
       return true;
     } catch (error) {
       console.error('Manage member error:', error);
+      set({ loading: false });
+      return false;
+    }
+  },
+
+  leaveEventAPI: async (eventId: string) => {
+    set({ loading: true });
+    try {
+      const result = await requestAPI(`/events/${eventId}/members`, 'POST', { action: 'LEAVE_EVENT' });
+      if (!result?.success) {
+        set({ loading: false });
+        return false;
+      }
+      set((state) => {
+        const remainingEvents = state.events.filter(e => e.id !== eventId);
+        Taro.setStorageSync('events', remainingEvents);
+        return {
+          events: remainingEvents,
+          currentEvent: state.currentEvent?.id === eventId ? null : state.currentEvent,
+          loading: false
+        };
+      });
+      return true;
+    } catch (error) {
+      console.error('Leave event error:', error);
       set({ loading: false });
       return false;
     }

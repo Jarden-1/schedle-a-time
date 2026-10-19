@@ -6,10 +6,12 @@ const jwt = require('jsonwebtoken');
 const baseUrl = process.env.SMOKE_BASE_URL || 'http://127.0.0.1:3000';
 const ownerOpenid = `__test_owner_${Date.now()}`;
 const otherOpenid = `__test_other_${Date.now()}`;
+const thirdOpenid = `__test_third_${Date.now()}`;
 const eventId = `__smoke_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
 const ownerToken = jwt.sign({ openid: ownerOpenid }, process.env.JWT_SECRET, { expiresIn: '10m' });
 const otherToken = jwt.sign({ openid: otherOpenid }, process.env.JWT_SECRET, { expiresIn: '10m' });
+const thirdToken = jwt.sign({ openid: thirdOpenid }, process.env.JWT_SECRET, { expiresIn: '10m' });
 
 const request = (method, path, token, body) => new Promise((resolve, reject) => {
   const payload = body === undefined ? undefined : JSON.stringify(body);
@@ -135,6 +137,31 @@ const cleanup = async () => {
       nickName: 'Other',
       availableSlots: ['2026-05-09_10:00-10:30']
     }, 400);
+
+    // ---------- 回归：普通参与者退出活动 ----------
+    await expectStatus('POST', `/api/events/${eventId}/availability`, thirdToken, {
+      nickName: 'Third',
+      availableSlots: ['2026-05-09_09:30-10:00']
+    }, 200);
+
+    await expectStatus('POST', `/api/events/${eventId}/members`, thirdToken, {
+      action: 'LEAVE_EVENT'
+    }, 200);
+
+    const afterLeave = await expectStatus('GET', `/api/events/${eventId}`, ownerToken, undefined, 200);
+    if (afterLeave.data?.data?.participants?.some(p => p.openid === thirdOpenid)) {
+      throw new Error('LEAVE_EVENT did not remove the participant');
+    }
+
+    // 旧版小程序退出走的是「踢自己」，必须继续可用
+    await expectStatus('POST', `/api/events/${eventId}/availability`, thirdToken, {
+      nickName: 'Third',
+      availableSlots: ['2026-05-09_09:30-10:00']
+    }, 200);
+    await expectStatus('POST', `/api/events/${eventId}/members`, thirdToken, {
+      action: 'KICK_MEMBER',
+      targetOpenid: thirdOpenid
+    }, 200);
 
     // 越界的确认时间必须被拒绝
     await expectStatus('POST', `/api/events/${eventId}/confirm`, ownerToken, {

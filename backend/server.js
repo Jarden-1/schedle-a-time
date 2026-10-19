@@ -992,29 +992,64 @@ app.post('/api/events/:id/confirm', verifyToken, async (req, res) => {
 app.post('/api/events/:id/members', verifyToken, async (req, res) => {
   try {
     const { targetOpenid, targetParticipantId, targetNickName, targetDisplayName, action } = req.body || {};
-    const event = await requireEventManager(req, res);
-    if (!event) return;
+    const event = await Event.findOne({ id: req.params.id });
+    if (!event) return res.status(404).json({ success: false, error: '未找到' });
 
     // 确保数组不为 undefined
     if (!event.adminIds) event.adminIds = [];
     if (!event.vipIds) event.vipIds = [];
 
-    const target = event.participants.find(p => {
+    const callerOpenid = req.user.openid;
+
+    // 找到目标成员
+    const findTarget = () => event.participants.find(p => {
       if (targetParticipantId && p.participantId === targetParticipantId) return true;
       if (targetOpenid && p.openid === targetOpenid) return true;
       return !targetOpenid && !targetParticipantId && !!targetNickName && p.nickName === targetNickName;
     });
 
+    const target = findTarget();
+    const resolvedOpenid = targetOpenid || target?.openid || '';
+
+    // 「自己退出活动」：这是普通参与者的能力，不受管理员权限限制。
+    // 同时兼容旧版小程序——旧版退出走的也是 KICK_MEMBER（目标是自己）。
+    const wantsLeave = action === 'LEAVE_EVENT';
+    const kicksSelf = action === 'KICK_MEMBER'
+      && !!callerOpenid
+      && resolvedOpenid === callerOpenid;
+
+    if (wantsLeave || kicksSelf) {
+      if (isEventCreator(event, callerOpenid)) {
+        return res.status(403).json({ success: false, error: '发起人不能退出活动，请删除活动或先转移发起人' });
+      }
+
+      // 只按调用者自己的 openid 删除，绝不使用客户端传来的目标
+      const selfParticipant = event.participants.find(p => p.openid && p.openid === callerOpenid);
+      if (!selfParticipant) {
+        return res.status(404).json({ success: false, error: '你不在该活动的成员列表中' });
+      }
+
+      event.participants = event.participants.filter(p => !(p.openid && p.openid === callerOpenid));
+      event.adminIds = event.adminIds.filter(id => id !== callerOpenid);
+      event.vipIds = event.vipIds.filter(id => id !== callerOpenid);
+      event.updatedAt = new Date().toISOString();
+      event.markModified('participants');
+      await event.save();
+      return res.json({ success: true, data: { left: true } });
+    }
+
     if (!target && action !== 'REMOVE_ADMIN' && action !== 'REMOVE_VIP') {
       return res.status(404).json({ success: false, error: '未找到该成员' });
     }
 
-    const resolvedOpenid = targetOpenid || target?.openid || '';
+    if (!canManageEvent(event, callerOpenid)) {
+      return res.status(403).json({ success: false, error: '无权操作该事件' });
+    }
 
     // 服务端强制执行角色层级，和前端界面的权限承诺保持一致
     const authError = authorizeMemberAction({
       event,
-      actorOpenid: req.user.openid,
+      actorOpenid: callerOpenid,
       action,
       targetParticipant: target,
       targetOpenid: resolvedOpenid

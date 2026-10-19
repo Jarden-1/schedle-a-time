@@ -378,6 +378,74 @@ const test = async (name, fn) => {
     assert.ok(events.get(event.id).adminIds.includes('alice'));
   });
 
+  // ---------- 退出活动 ----------
+  await test('普通参与者可以退出活动（旧版用自踢 KICK_MEMBER 兼容）', async () => {
+    const event = seedEvent();
+    const res = await invoke('POST', '/api/events/:id/members', {
+      openid: 'alice',
+      params: { id: event.id },
+      body: { action: 'KICK_MEMBER', targetOpenid: 'alice' }
+    });
+    assert.strictEqual(res.statusCode, 200, JSON.stringify(res.body));
+    assert.ok(!events.get(event.id).participants.some(p => p.openid === 'alice'));
+  });
+
+  await test('普通参与者可以退出活动（LEAVE_EVENT）', async () => {
+    const event = seedEvent();
+    const res = await invoke('POST', '/api/events/:id/members', {
+      openid: 'alice',
+      params: { id: event.id },
+      body: { action: 'LEAVE_EVENT' }
+    });
+    assert.strictEqual(res.statusCode, 200, JSON.stringify(res.body));
+    assert.ok(!events.get(event.id).participants.some(p => p.openid === 'alice'));
+  });
+
+  await test('退出时同步回收管理员/嘉宾身份', async () => {
+    const event = seedEvent({ adminIds: ['alice'], vipIds: ['alice'] });
+    const res = await invoke('POST', '/api/events/:id/members', {
+      openid: 'alice',
+      params: { id: event.id },
+      body: { action: 'LEAVE_EVENT' }
+    });
+    assert.strictEqual(res.statusCode, 200, JSON.stringify(res.body));
+    const after = events.get(event.id);
+    assert.deepStrictEqual(after.adminIds, []);
+    assert.deepStrictEqual(after.vipIds, []);
+  });
+
+  await test('发起人不能退出活动', async () => {
+    const event = seedEvent();
+    const res = await invoke('POST', '/api/events/:id/members', {
+      openid: 'creator',
+      params: { id: event.id },
+      body: { action: 'LEAVE_EVENT' }
+    });
+    assert.strictEqual(res.statusCode, 403);
+    assert.ok(events.get(event.id).participants.some(p => p.openid === 'creator'));
+  });
+
+  await test('非成员退出返回 404', async () => {
+    const event = seedEvent();
+    const res = await invoke('POST', '/api/events/:id/members', {
+      openid: 'stranger',
+      params: { id: event.id },
+      body: { action: 'LEAVE_EVENT' }
+    });
+    assert.strictEqual(res.statusCode, 404);
+  });
+
+  await test('普通成员不能借退出接口移除他人', async () => {
+    const event = seedEvent();
+    const res = await invoke('POST', '/api/events/:id/members', {
+      openid: 'alice',
+      params: { id: event.id },
+      body: { action: 'KICK_MEMBER', targetOpenid: 'bob' }
+    });
+    assert.strictEqual(res.statusCode, 403);
+    assert.ok(events.get(event.id).participants.some(p => p.openid === 'bob'), 'bob 不应被移除');
+  });
+
   // ---------- P1-5 范围变更与确认校验 ----------
   await test('P1-5 确认时间超出活动范围被拒绝', async () => {
     const event = seedEvent();

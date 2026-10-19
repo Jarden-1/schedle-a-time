@@ -31,7 +31,7 @@ export default function Index() {
     setTabIndex,
     updateEventAPI,
     deleteEventAPI,
-    manageMemberAPI,
+    leaveEventAPI,
     fetchLatestAnnouncementAPI
   } = useAppStore();
 
@@ -161,7 +161,11 @@ export default function Index() {
     const isAdmin = !!(openid && Array.isArray(event.adminIds) && event.adminIds.includes(openid));
     if (isAdmin) return 'admin';
 
-    const isParticipant = !!userNickName && event.participants?.some((p) => p.nickName === userNickName);
+    const isParticipant = !!event.participants?.some((p) => {
+      const matchOpenid = !!openid && p.openid === openid;
+      const matchNick = !!userNickName && p.nickName === userNickName;
+      return matchOpenid || matchNick;
+    });
     return isParticipant ? 'participant' : 'none';
   };
 
@@ -207,20 +211,17 @@ export default function Index() {
       Taro.showToast({ title: '请先登录', icon: 'none' });
       return;
     }
-    setLocalEvents((prev) =>
-      prev.map((e) => (e.id === eventId && e.participants ? { ...e, participants: e.participants.filter((p) => p.nickName !== userNickName) } : e))
-    );
-    const event = events.find((e) => e.id === eventId);
-    const participant = event?.participants?.find((p) => {
-      if (currentUser?.openid && p.openid === currentUser.openid) return true;
-      return p.nickName === userNickName;
-    });
-    const success = await manageMemberAPI(eventId, currentUser?.openid || participant?.openid || '', userNickName, 'KICK_MEMBER', participant?.participantId);
+
+    // 先在本地移除，失败再回滚
+    setLocalEvents((prev) => prev.filter((e) => e.id !== eventId));
+
+    // 🚨 退出是自己的操作，走专属接口，不再借用「管理员移除成员」的 KICK_MEMBER
+    const success = await leaveEventAPI(eventId);
     if (success) {
       Taro.showToast({ title: '已退出', icon: 'success' });
     } else {
       await fetchEvents();
-      Taro.showToast({ title: '退出失败', icon: 'none' });
+      Taro.showToast({ title: '退出失败，请重试', icon: 'none' });
     }
   };
 
