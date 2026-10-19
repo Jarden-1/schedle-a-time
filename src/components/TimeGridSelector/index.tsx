@@ -8,6 +8,18 @@ import './index.scss';
 type GridCell = { slotKey: string; row: number; col: number; };
 type DragMode = 'select' | 'erase';
 
+/**
+ * 拖选时的边缘自动滚动。
+ *
+ * 原生滚动是「内容跟着手指走」，拖选时方向正好相反：想选下面的格子，
+ * 屏幕却往上翻出上面已经看过的部分。所以手指拖到屏幕上下边缘并停住时，
+ * 由我们主动滚动页面 —— 贴下边缘 → scrollTop 增大（内容上移，下面格子出来），
+ * 贴上边缘反之。速度按离边缘的远近线性衰减，不会失控。
+ */
+const EDGE_ZONE = 80;      // 距离边缘多少像素内触发
+const EDGE_TICK_MS = 50;   // 每 50ms 滚一次
+const EDGE_STEP_PX = 10;   // 贴边时的单次步长
+
 type Props = {
   slotKeys: string[];
   selected: Set<string>;
@@ -202,6 +214,8 @@ export default function TimeGridSelector(props: Props) {
   };
 
 
+  const edgeTimerRef = useRef<any>(null);
+  const fingerYRef = useRef(0);
   const draggingRef = useRef(false);
   const dragStartRef = useRef<{ row: number; col: number } | null>(null);
   const dragModeRef = useRef<DragMode>('select');
@@ -297,6 +311,41 @@ export default function TimeGridSelector(props: Props) {
     setRenderSelected(next);
   }, [cellKeyByPos]);
 
+  const stopEdgeScroll = useCallback(() => {
+    if (edgeTimerRef.current) {
+      clearInterval(edgeTimerRef.current);
+      edgeTimerRef.current = null;
+    }
+  }, []);
+
+  // 组件卸载时确保定时器被清掉
+  useEffect(() => () => stopEdgeScroll(), [stopEdgeScroll]);
+
+  const startEdgeScroll = useCallback(() => {
+    if (edgeTimerRef.current) return;
+
+    let windowHeight = 0;
+    try { windowHeight = Taro.getSystemInfoSync().windowHeight || 0; } catch { windowHeight = 0; }
+    if (!windowHeight) return;
+
+    edgeTimerRef.current = setInterval(() => {
+      const y = fingerYRef.current;
+      let delta = 0;
+
+      if (y < EDGE_ZONE) {
+        // 贴近顶部：内容下移，露出上方格子
+        delta = -(1 - y / EDGE_ZONE) * EDGE_STEP_PX;
+      } else if (y > windowHeight - EDGE_ZONE) {
+        // 贴近底部：内容上移，露出下方格子
+        delta = (1 - (windowHeight - y) / EDGE_ZONE) * EDGE_STEP_PX;
+      }
+
+      if (Math.abs(delta) < 1) return;
+      const next = Math.max(0, (scrollTopRef?.current ?? 0) + delta);
+      Taro.pageScrollTo({ scrollTop: next, duration: 0 });
+    }, EDGE_TICK_MS);
+  }, [scrollTopRef]);
+
   const enterDragMode = useCallback((startPos: { row: number; col: number }, showHint: boolean) => {
     if (draggingRef.current) return;
 
@@ -311,8 +360,9 @@ export default function TimeGridSelector(props: Props) {
     if (showHint && !forceDragMode) {
       Taro.showToast({ title: '别松手，滑动即可多选', icon: 'none', duration: 1500 });
     }
+    startEdgeScroll();
     applyRect(startPos, startPos);
-  }, [applyRect, cellKeyByPos, forceDragMode]);
+  }, [applyRect, cellKeyByPos, forceDragMode, startEdgeScroll]);
 
   const commitSelection = useCallback((next: Set<string>) => {
     const committed = new Set(next);
@@ -342,6 +392,7 @@ export default function TimeGridSelector(props: Props) {
 
     session.startX = t.clientX;
     session.startY = t.clientY;
+    fingerYRef.current = t.clientY;
     session.moved = false;
     session.ended = false;
 
@@ -369,6 +420,7 @@ export default function TimeGridSelector(props: Props) {
   const onTouchMove = useCallback((e: any) => {
     if (readonlyMode || !enabled) return;
     const t = e.touches[0];
+    fingerYRef.current = t.clientY;
     const session = touchSessionRef.current;
 
     if (!draggingRef.current) {
@@ -414,6 +466,7 @@ export default function TimeGridSelector(props: Props) {
     clearLongPressTimer();
 
     if (draggingRef.current) {
+      stopEdgeScroll();
       commitSelection(tempSelectedRef.current);
       draggingRef.current = false;
       setIsDragging(false);
@@ -431,7 +484,7 @@ export default function TimeGridSelector(props: Props) {
         if (pos) handleSingleClick(pos);
       });
     }
-  }, [commitSelection, enabled, handleSingleClick, readonlyMode, measureGrid, pointToCell]);
+  }, [commitSelection, enabled, handleSingleClick, readonlyMode, measureGrid, pointToCell, stopEdgeScroll]);
 
   return (
     // 🎯 修复 2：彻底移除外部动态包裹的 catchMove，完全交给底部的【多选】按钮去接管
