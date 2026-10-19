@@ -14,6 +14,7 @@ export const TRACK = {
   LOGIN_CARD_SHOWN: 'login_card_shown',
 
   EVENT_OPEN: 'event_open',
+  EVENT_DETAIL_LOADED: 'event_detail_loaded',
   EVENT_CREATE_SUBMIT: 'event_create_submit',
   EVENT_CREATE_SUCCESS: 'event_create_success',
   EVENT_CREATE_FAIL: 'event_create_fail',

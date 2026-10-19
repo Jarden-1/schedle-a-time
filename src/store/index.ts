@@ -286,7 +286,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         Taro.setStorageSync('events', get().events);
         track(TRACK.EVENT_CREATE_SUCCESS, {
           timeMode: String(form.timeMode),
-          autoFill: form.timeMode ? 1 : 0
+          participantCount: 1
         });
         return result.data as Event;
       }
@@ -370,8 +370,15 @@ export const useAppStore = create<AppState>((set, get) => ({
       }) as AvailabilityResult;
 
       if (result && result.success) {
-        track(TRACK.SELECT_SUCCESS, { slotCount: availableSlots.length, isProxy: isProxy === true });
-        await get().fetchEvents(); // 成功后刷新数据
+        // 刷新后取最新的参与人数：一个人刚加入时也能算准
+        await get().fetchEvents();
+        const updated = get().events.find(e => e.id === eventId);
+        track(TRACK.SELECT_SUCCESS, {
+          slotCount: availableSlots.length,
+          isProxy: isProxy === true,
+          participantCount: updated?.participants?.length ?? 0,
+          submittedCount: typeof updated?.submittedCount === 'number' ? updated.submittedCount : 0
+        });
         return { success: true };
       }
       track(TRACK.SELECT_FAIL, {

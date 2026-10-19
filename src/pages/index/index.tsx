@@ -132,7 +132,11 @@ export default function Index() {
   };
 
   const handleEventClick = (eventId: string) => {
-    track(TRACK.EVENT_OPEN);
+    const target = localEvents.find((item) => item.id === eventId);
+    track(TRACK.EVENT_OPEN, {
+      participantCount: target?.participants?.length ?? 0,
+      submittedCount: typeof target?.submittedCount === 'number' ? target.submittedCount : 0
+    });
     Taro.navigateTo({ url: `/pages/event/detail/index?id=${eventId}` });
   };
   // 🚨 修复 1：强制大写匹配，防止拿不到文字

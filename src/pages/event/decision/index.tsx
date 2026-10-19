@@ -57,6 +57,10 @@ export default function DecisionPanel() {
     const cloudEvent = await getEventById(id);
     if (cloudEvent) {
       setEvent(cloudEvent);
+      track(TRACK.DECISION_VIEW, {
+        participantCount: cloudEvent.participants?.length ?? 0,
+        submittedCount: typeof cloudEvent.submittedCount === 'number' ? cloudEvent.submittedCount : 0
+      });
     } else {
       // 只有「网络类」错误才允许回退到本地缓存；404 说明活动已被删除
       const { eventLoadError: loadError, events: cachedEvents } = useAppStore.getState();

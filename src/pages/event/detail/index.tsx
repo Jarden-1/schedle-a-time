@@ -122,6 +122,11 @@ export default function EventDetail() {
     const cloudEvent = await getEventById(id);
     if (cloudEvent) {
       setEvent(cloudEvent);
+      track(TRACK.EVENT_DETAIL_LOADED, {
+        participantCount: cloudEvent.participants?.length ?? 0,
+        submittedCount: typeof cloudEvent.submittedCount === 'number' ? cloudEvent.submittedCount : 0,
+        status: String(cloudEvent.status || '')
+      });
       return;
     }
 
