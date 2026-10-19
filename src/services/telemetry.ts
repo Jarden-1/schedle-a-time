@@ -135,16 +135,9 @@ export const trackError = (error: any, context: ErrorContext = {}) => {
   }
 };
 
-/** 在 app 启动时调用一次 */
+/** 在 app 启动时调用一次（全局错误处理器见 services/globalHandlers） */
 export const initTelemetry = () => {
   try {
-    // 全局错误
-    (Taro as any).onError?.((res: any) => {
-      trackError(res?.message || 'app_error', { meta: { stack: res?.stack } });
-    });
-    (Taro as any).onUnhandledRejection?.((res: any) => {
-      trackError(res?.reason, { meta: { type: 'unhandledRejection' } });
-    });
     (Taro as any).onAppHide?.(() => { flush(); });
   } catch {
     /* ignore */
