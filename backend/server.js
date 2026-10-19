@@ -683,7 +683,7 @@ app.get('/api/user/weekly-unavailable', verifyToken, async (req, res) => {
       success: true,
       data: {
         weeklyUnavailableSlots: preference?.weeklyUnavailableSlots || [],
-        autoApplyWeeklyUnavailable: preference?.autoApplyWeeklyUnavailable !== false
+        autoApplyWeeklyUnavailable: preference?.autoApplyWeeklyUnavailable === true
       }
     });
   } catch (error) {
@@ -697,7 +697,7 @@ app.put('/api/user/weekly-unavailable', verifyToken, async (req, res) => {
     const weeklyUnavailableSlots = Array.isArray(req.body?.weeklyUnavailableSlots)
       ? Array.from(new Set(req.body.weeklyUnavailableSlots))
       : [];
-    const autoApplyWeeklyUnavailable = req.body?.autoApplyWeeklyUnavailable !== false;
+    const autoApplyWeeklyUnavailable = req.body?.autoApplyWeeklyUnavailable === true;
 
     if (weeklyUnavailableSlots.length > 336 || weeklyUnavailableSlots.some(slot => !isValidWeeklySlotKey(slot))) {
       return res.status(400).json({ success: false, error: '常规不可用时段数据不合法' });

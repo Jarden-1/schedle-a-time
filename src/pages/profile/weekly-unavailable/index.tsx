@@ -114,7 +114,7 @@ export default function WeeklyUnavailablePage() {
         <View className="setting-row">
           <View className="setting-copy">
             <Text className="setting-title">参与活动时自动套用</Text>
-            <Text className="setting-desc">进入选时间页面后，默认避开这些常规不可用时段。</Text>
+            <Text className="setting-desc">默认关闭，由你手动选择空闲时间；开启后自动选中常规不可用时段以外的时间。</Text>
           </View>
           <Switch checked={autoApply} onChange={(e: any) => setAutoApply(e.detail.value ?? e.detail.checked)} />
         </View>

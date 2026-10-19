@@ -422,14 +422,14 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   weeklyUnavailableSlots: Taro.getStorageSync('weeklyUnavailableSlots') || [],
-  autoApplyWeeklyUnavailable: Taro.getStorageSync('autoApplyWeeklyUnavailable') !== false,
+  autoApplyWeeklyUnavailable: Taro.getStorageSync('autoApplyWeeklyUnavailable') === true,
   fetchWeeklyUnavailableAPI: async () => {
     try {
       const result = await requestAPI('/user/weekly-unavailable', 'GET');
       if (!result?.success || !result.data) return null;
       const settings = result.data as WeeklyUnavailableSettings;
       const slots = Array.isArray(settings.weeklyUnavailableSlots) ? settings.weeklyUnavailableSlots : [];
-      const autoApply = settings.autoApplyWeeklyUnavailable !== false;
+      const autoApply = settings.autoApplyWeeklyUnavailable === true;
       set({
         weeklyUnavailableSlots: slots,
         autoApplyWeeklyUnavailable: autoApply
@@ -441,7 +441,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       console.error('Fetch weekly unavailable error:', error);
       return {
         weeklyUnavailableSlots: Taro.getStorageSync('weeklyUnavailableSlots') || [],
-        autoApplyWeeklyUnavailable: Taro.getStorageSync('autoApplyWeeklyUnavailable') !== false
+        autoApplyWeeklyUnavailable: Taro.getStorageSync('autoApplyWeeklyUnavailable') === true
       };
     }
   },
@@ -454,7 +454,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       });
       if (!result?.success || !result.data) return false;
       const slots = Array.isArray(result.data.weeklyUnavailableSlots) ? result.data.weeklyUnavailableSlots : [];
-      const autoApply = result.data.autoApplyWeeklyUnavailable !== false;
+      const autoApply = result.data.autoApplyWeeklyUnavailable === true;
       set({
         weeklyUnavailableSlots: slots,
         autoApplyWeeklyUnavailable: autoApply
