@@ -287,6 +287,17 @@ export default function DecisionPanel() {
 
   const hasRecommendationTarget = isDateOnly ? !!targetDays : !!targetDuration;
 
+  const submittedCount = typeof event?.submittedCount === 'number'
+    ? event.submittedCount
+    : (event?.participants || []).filter((p: any) => (
+        p?.hasSubmitted === true || (Array.isArray(p?.availableSlots) && p.availableSlots.length > 0)
+      )).length;
+
+  // 🚨 没有任何人有时段时，仍然允许发起人手动选一个并确认
+  const emptyHintTitle = submittedCount > 0
+    ? `${submittedCount} 人已填写，但当前时段无人有空`
+    : '还没有人填写时间';
+
   // 精选 Top 3，更多探索交给热力图
   const topMergedSlots = useMemo(() => bestWindows.slice(0, 3), [bestWindows]);
 
@@ -511,8 +522,18 @@ export default function DecisionPanel() {
               </View>
             )}
           </View>
+        </>
+      ) : (
+        <View className="recommend-empty">
+          <Text className="empty-title">{emptyHintTitle}</Text>
+          <Text className="empty-desc">
+            可以直接在下面的{isDateOnly ? '日期列表' : '热力图'}中手动选择，
+            即使没有人有空，也可以照常确认时间。
+          </Text>
+        </View>
+      )}
 
-          {event.timeMode === TimeMode.TIME_SLOT && slotKeys.length > 0 && (
+      {event.timeMode === TimeMode.TIME_SLOT && slotKeys.length > 0 && (
             <View className="heatmap-section">
               <View className="heatmap-header">
                 <View className="header-top-row">
@@ -674,21 +695,6 @@ export default function DecisionPanel() {
               )}
             </View>
           )}
-        </>
-      ) : (
-        <View className="empty-state">
-          <Text className="empty-icon">📝</Text>
-          <Text className="empty-text">还没有人填写时间</Text>
-          <Text className="empty-tip">分享给更多人参与吧！</Text>
-          <Button 
-            className="share-btn" 
-            openType="share"
-            onClick={() => {}}
-          >
-            邀请好友
-          </Button>
-        </View>
-      )}
 
       {/* 决策面板纯文案分步引导 */}
       {showDecisionGuide && (

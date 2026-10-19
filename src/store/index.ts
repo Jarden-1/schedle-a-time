@@ -190,14 +190,24 @@ export const useAppStore = create<AppState>((set, get) => ({
   fetchEvents: async () => {
     set({ loading: true });
     try {
-      const result = await requestAPI('/events', 'GET');
-      if (result?.success && result.data) {
-        const serverEvents = result.data;
-        set({ events: serverEvents, loading: false });
-        Taro.setStorageSync('events', serverEvents);
-      } else {
-        throw new Error('获取失败');
+      // 🚨 列表接口已分页：按 200 一页拉取，最多 5 页，避免一次拉爆
+      const pageSize = 200;
+      const maxPages = 5;
+      let offset = 0;
+      let collected: Event[] = [];
+
+      for (let page = 0; page < maxPages; page++) {
+        const result = await requestAPI(`/events?limit=${pageSize}&offset=${offset}`, 'GET');
+        if (!result?.success || !Array.isArray(result.data)) {
+          throw new Error('获取失败');
+        }
+        collected = collected.concat(result.data as Event[]);
+        offset += result.data.length;
+        if (!result.pagination?.hasMore || result.data.length === 0) break;
       }
+
+      set({ events: collected, loading: false });
+      Taro.setStorageSync('events', collected);
     } catch (error) {
       console.error('Fetch events error:', error);
 
