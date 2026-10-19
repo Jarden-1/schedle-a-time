@@ -1,6 +1,7 @@
 import Taro from '@tarojs/taro';
 import { requestRawAPI } from '@/services/api';
 import { normalizeUser } from '@/utils/user';
+import { useAppStore } from '@/store';
 
 /**
  * 调试身份切换。
@@ -73,12 +74,39 @@ const saveSnapshotIfNeeded = () => {
   }
 };
 
+/**
+ * 把身份同时写进内存 store。
+ *
+ * Taro.reLaunch 只重建页面，不会重建 JS 上下文，zustand store 仍然存在，
+ * 只改 Storage 的话界面还是旧身份——这正是「点了没反应」的原因。
+ */
+const applyIdentity = (token: string, openid: string, nickName: string, avatarUrl: string) => {
+  const user = normalizeUser({ id: openid, openid, nickName, avatarUrl });
+  Taro.setStorageSync('token', token);
+  Taro.setStorageSync('currentUser', user);
+  if (nickName) Taro.setStorageSync('userNickName', nickName);
+
+  useAppStore.getState().setCurrentUser(user);
+  useAppStore.getState().setUserNickName(nickName);
+  useAppStore.getState().setEvents([]);
+  Taro.removeStorageSync('events');
+};
+
 const relaunch = () => {
   Taro.reLaunch({ url: '/pages/index/index' });
 };
 
+/** 调试身份默认头像（包内静态资源，避免依赖外网图片） */
+const DEBUG_AVATAR = '/icon/my-unselected.png';
+
+interface SwitchOptions {
+  /** 不填昵称头像，用于验证「未完善资料 → 登录卡」流程 */
+  incomplete?: boolean;
+  nickname?: string;
+}
+
 /** 切换到任意 openid（传空则随机生成一个全新用户） */
-export const switchToDebugIdentity = async (openid?: string) => {
+export const switchToDebugIdentity = async (openid?: string, options: SwitchOptions = {}) => {
   const target = (openid && openid.trim()) || `debug_${Date.now().toString(36)}`;
   saveSnapshotIfNeeded();
 
@@ -92,14 +120,12 @@ export const switchToDebugIdentity = async (openid?: string) => {
     throw new Error(friendly);
   }
 
+  const incomplete = options.incomplete === true;
+  const nickName = incomplete ? '' : (options.nickname || '调试用户');
+  const avatarUrl = incomplete ? '' : DEBUG_AVATAR;
+
   clearLocalState();
-  Taro.setStorageSync('token', result.data.token);
-  Taro.setStorageSync('currentUser', normalizeUser({
-    id: result.data.openid,
-    openid: result.data.openid,
-    nickName: '',
-    avatarUrl: ''
-  }));
+  applyIdentity(result.data.token, result.data.openid, nickName, avatarUrl);
   Taro.setStorageSync(FLAG_KEY, '1');
   relaunch();
 };
@@ -112,9 +138,12 @@ export const switchToSelf = async () => {
 
   if (snapshot?.token) {
     clearLocalState();
-    Taro.setStorageSync('token', snapshot.token);
-    if (snapshot.user) Taro.setStorageSync('currentUser', snapshot.user);
-    if (snapshot.nickName) Taro.setStorageSync('userNickName', snapshot.nickName);
+    applyIdentity(
+      snapshot.token,
+      snapshot.user?.openid || snapshot.user?.id || '',
+      snapshot.user?.nickName || snapshot.nickName || '',
+      snapshot.user?.avatarUrl || ''
+    );
     Taro.setStorageSync(FLAG_KEY, '1');
     relaunch();
     return;
@@ -127,13 +156,7 @@ export const switchToSelf = async () => {
     throw new Error(result?.error || '登录失败');
   }
   clearLocalState();
-  Taro.setStorageSync('token', result.data.token);
-  Taro.setStorageSync('currentUser', normalizeUser({
-    id: result.data.openid,
-    openid: result.data.openid,
-    nickName: '',
-    avatarUrl: ''
-  }));
+  applyIdentity(result.data.token, result.data.openid, '', '');
   Taro.setStorageSync(FLAG_KEY, '1');
   relaunch();
 };

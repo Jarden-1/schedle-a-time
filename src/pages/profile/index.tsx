@@ -283,19 +283,35 @@ export default function Profile() {
           </View>
 
           <View className="debug-grid">
-            <View className="debug-item" onClick={() => runDebugAction(() => switchToDebugIdentity())}>
+            <View
+              className="debug-item"
+              onClick={() => runDebugAction(() => switchToDebugIdentity(undefined, { nickname: '调试用户' }))}
+            >
               <Text className="debug-item-title">全新用户</Text>
-              <Text className="debug-item-desc">随机 openid，无历史数据</Text>
+              <Text className="debug-item-desc">已登录，可直接使用</Text>
             </View>
-            <View className="debug-item" onClick={() => runDebugAction(() => switchToDebugIdentity('u_test_a'))}>
+            <View
+              className="debug-item"
+              onClick={() => runDebugAction(() => switchToDebugIdentity(undefined, { incomplete: true }))}
+            >
+              <Text className="debug-item-title">未完善资料</Text>
+              <Text className="debug-item-desc">验证首次登录卡流程</Text>
+            </View>
+            <View
+              className="debug-item"
+              onClick={() => runDebugAction(() => switchToDebugIdentity('u_test_a', { nickname: '测试A' }))}
+            >
               <Text className="debug-item-title">测试 A</Text>
               <Text className="debug-item-desc">固定账号 u_test_a</Text>
             </View>
-            <View className="debug-item" onClick={() => runDebugAction(() => switchToDebugIdentity('u_test_b'))}>
+            <View
+              className="debug-item"
+              onClick={() => runDebugAction(() => switchToDebugIdentity('u_test_b', { nickname: '测试B' }))}
+            >
               <Text className="debug-item-title">测试 B</Text>
               <Text className="debug-item-desc">固定账号 u_test_b</Text>
             </View>
-            <View className="debug-item debug-item--primary" onClick={() => runDebugAction(switchToSelf)}>
+            <View className="debug-item debug-item--wide debug-item--primary" onClick={() => runDebugAction(switchToSelf)}>
               <Text className="debug-item-title">回到我自己</Text>
               <Text className="debug-item-desc">恢复真实微信身份</Text>
             </View>
