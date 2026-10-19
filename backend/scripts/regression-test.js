@@ -8,6 +8,9 @@
  */
 const assert = require('assert');
 const Module = require('module');
+const fs = require('fs');
+const path = require('path');
+const sharp = require('sharp');
 
 // ==========================================
 // 1. 内存数据库替身
@@ -65,9 +68,20 @@ const applySet = (doc, set) => {
 
 const EventModel = {
   findOne: async (filter) => hydrate(events.get(filter.id)),
-  find: () => ({
-    sort: async () => Array.from(events.values()).map(hydrate)
-  }),
+  find: () => {
+    let skipCount = 0;
+    let limitCount = Infinity;
+    const chain = {
+      sort: () => chain,
+      skip: (n) => { skipCount = Number(n) || 0; return chain; },
+      limit: (n) => { limitCount = Number(n) || Infinity; return chain; },
+      then: (resolve) => resolve(
+        Array.from(events.values()).map(hydrate).slice(skipCount, skipCount + limitCount)
+      )
+    };
+    return chain;
+  },
+  countDocuments: async () => events.size,
   findOneAndUpdate: async (filter, update) => {
     const raw = events.get(filter.id);
     if (!raw || !statusMatches(raw, filter)) return null;
@@ -149,6 +163,7 @@ const register = (method) => (routePath, ...handlers) => {
 };
 const app = {
   use() {},
+  set() {},
   get: register('GET'),
   post: register('POST'),
   put: register('PUT'),
@@ -204,19 +219,31 @@ require('../server');
 // ==========================================
 // 3. 调用路由
 // ==========================================
-const invoke = async (method, routePath, { body = {}, openid = '', params = {}, headers = {} } = {}) => {
+const makeRes = () => ({
+  statusCode: 200,
+  body: undefined,
+  headersSent: false,
+  headers: {},
+  setHeader(key, value) { this.headers[key] = value; return this; },
+  status(code) { this.statusCode = code; return this; },
+  json(payload) { this.body = payload; this.headersSent = true; return this; }
+});
+
+const invoke = async (method, routePath, { body = {}, openid = '', params = {}, headers = {}, query = {} } = {}) => {
   const handlers = routes.get(`${method} ${routePath}`);
   assert.ok(handlers, `路由不存在: ${method} ${routePath}`);
   const handler = handlers[handlers.length - 1];
-  const req = { body, params, headers, query: {}, user: { openid } };
-  const res = {
-    statusCode: 200,
-    body: undefined,
-    headersSent: false,
-    status(code) { this.statusCode = code; return this; },
-    json(payload) { this.body = payload; this.headersSent = true; return this; }
-  };
+  const req = { body, params, headers, query, user: { openid } };
+  const res = makeRes();
   await handler(req, res);
+
+  // 有些路由（如上传）把响应写在 async 回调里，这里等一下
+  if (!res.headersSent) {
+    const startedAt = Date.now();
+    while (!res.headersSent && Date.now() - startedAt < 2000) {
+      await new Promise(r => setTimeout(r, 10));
+    }
+  }
   return res;
 };
 
@@ -713,6 +740,67 @@ const test = async (name, fn) => {
     });
     const bob = res.body.data.participants.find(p => p.openid === 'bob');
     assert.ok(bob.availableSlots.length > 0);
+  });
+
+  // ---------- 上传：解码重编码 ----------
+  await test('上传图片会被解码重编码为 jpg', async () => {
+    const png = await sharp({
+      create: { width: 40, height: 20, channels: 3, background: { r: 10, g: 200, b: 90 } }
+    }).png().toBuffer();
+
+    uploadBuffer = png;
+    const res = await invoke('POST', '/api/upload', { openid: 'creator' });
+    assert.strictEqual(res.statusCode, 200, JSON.stringify(res.body));
+    assert.ok(res.body.url.endsWith('.jpg'), res.body.url);
+
+    const filename = res.body.url.split('/').pop();
+    const filePath = path.join(__dirname, '..', 'uploads', filename);
+    assert.ok(fs.existsSync(filePath), '文件应已落盘');
+    const meta = await sharp(fs.readFileSync(filePath)).metadata();
+    assert.strictEqual(meta.format, 'jpeg');
+    fs.unlinkSync(filePath);
+  });
+
+  // ---------- 列表分页与轻量返回 ----------
+  await test('活动列表分页且不返回具体时段', async () => {
+    events.clear();
+    seedEvent();
+    seedEvent();
+
+    const all = await invoke('GET', '/api/events', { openid: 'creator' });
+    assert.strictEqual(all.statusCode, 200);
+    assert.strictEqual(all.body.data.length, 2);
+    assert.strictEqual(all.body.pagination.total, 2);
+    assert.strictEqual(all.body.pagination.hasMore, false);
+    all.body.data.forEach((event) => {
+      event.participants.forEach((participant) => {
+        assert.strictEqual('availableSlots' in participant, false, '列表不应返回 availableSlots');
+        assert.strictEqual(typeof participant.hasSubmitted, 'boolean');
+      });
+    });
+
+    const page = await invoke('GET', '/api/events', { openid: 'creator', query: { limit: '1' } });
+    assert.strictEqual(page.body.data.length, 1);
+    assert.strictEqual(page.body.pagination.hasMore, true);
+  });
+
+  // ---------- 限流 ----------
+  await test('登录接口具备频率限制', async () => {
+    const handlers = routes.get('POST /api/login');
+    assert.ok(handlers && handlers.length >= 2, '登录路由应挂载限流中间件');
+    const limiter = handlers[0];
+
+    let blocked = 0;
+    for (let i = 0; i < 30; i++) {
+      const res = makeRes();
+      let passed = false;
+      limiter({ ip: '203.0.113.7', headers: {} }, res, () => { passed = true; });
+      if (!passed) {
+        blocked += 1;
+        assert.strictEqual(res.statusCode, 429);
+      }
+    }
+    assert.ok(blocked > 0, '超过阈值后应被拦截');
   });
 
   const failed = results.filter(result => !result.ok);

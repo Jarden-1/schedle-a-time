@@ -3,6 +3,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const multer = require('multer');
+const sharp = require('sharp');
 const axios = require('axios');
 const jwt = require('jsonwebtoken');
 const path = require('path');
@@ -11,8 +12,55 @@ const Event = require('./models/Event');
 const UserPreference = require('./models/UserPreference');
 
 const app = express();
-app.use(cors());
+
+// 反向代理后面要拿到真实 IP，限流才有意义
+app.set('trust proxy', 1);
+
+// 🚨 CORS 收紧：小程序原生请求不带 Origin，不受影响；
+// 需要浏览器跨域调试时用 CORS_ORIGINS=https://a.com,https://b.com 或 *=放开
+const parseCorsOrigins = () => {
+  const raw = (process.env.CORS_ORIGINS || '').trim();
+  if (raw === '*') return '*';
+  return raw.split(',').map(item => item.trim()).filter(Boolean);
+};
+const allowedOrigins = parseCorsOrigins();
+app.use(cors({
+  origin(origin, callback) {
+    // 无 Origin：小程序 / 服务端调用，直接放行
+    if (!origin) return callback(null, true);
+    if (allowedOrigins === '*') return callback(null, true);
+    if (Array.isArray(allowedOrigins) && allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(null, false);
+  }
+}));
 app.use(express.json());
+
+// 🚨 轻量限流：防止 /login、/upload 被脚本刷爆（Nginx 层再做一层更稳）
+const createRateLimiter = ({ windowMs, max, name }) => {
+  const hits = new Map();
+  return (req, res, next) => {
+    const now = Date.now();
+    const key = `${name}:${req.ip || 'unknown'}`;
+    const entry = hits.get(key);
+
+    if (!entry || entry.resetAt <= now) {
+      hits.set(key, { count: 1, resetAt: now + windowMs });
+      if (hits.size > 5000) {
+        for (const [k, v] of hits) if (v.resetAt <= now) hits.delete(k);
+      }
+      return next();
+    }
+
+    entry.count += 1;
+    if (entry.count > max) {
+      res.setHeader('Retry-After', String(Math.ceil((entry.resetAt - now) / 1000)));
+      return res.status(429).json({ success: false, error: '请求过于频繁，请稍后再试' });
+    }
+    return next();
+  };
+};
+const loginLimiter = createRateLimiter({ windowMs: 60 * 1000, max: 20, name: 'login' });
+const uploadLimiter = createRateLimiter({ windowMs: 60 * 1000, max: 10, name: 'upload' });
 
 // 1. 静态文件夹配置
 const uploadDir = path.join(__dirname, 'uploads');
@@ -200,10 +248,10 @@ const normalizeParticipant = (participant, fallbackOpenid) => {
 };
 
 // 决策数据隔离：只有管理员，或活动开启了「决策公开」，才返回他人填写的具体时段
-const projectParticipant = (participant, viewerOpenid, fullAccess) => {
+const projectParticipant = (participant, viewerOpenid, fullAccess, includeSlots = true) => {
   const plain = toPlainParticipant(participant);
   const isSelf = !!viewerOpenid && plain.openid === viewerOpenid;
-  return {
+  const view = {
     participantId: plain.participantId,
     userId: plain.userId,
     openid: plain.openid,
@@ -211,16 +259,23 @@ const projectParticipant = (participant, viewerOpenid, fullAccess) => {
     eventDisplayName: plain.eventDisplayName,
     avatarUrl: plain.avatarUrl,
     submittedAt: plain.submittedAt,
-    hasSubmitted: plain.hasSubmitted,
-    availableSlots: (fullAccess || isSelf) ? plain.availableSlots : []
+    hasSubmitted: plain.hasSubmitted
   };
+  // 列表页不需要每个人的具体时间，省掉这坨数据能显著减小响应体
+  if (includeSlots) {
+    view.availableSlots = (fullAccess || isSelf) ? plain.availableSlots : [];
+  }
+  return view;
 };
 
-const projectEventForViewer = (event, viewerOpenid) => {
+const projectEventForViewer = (event, viewerOpenid, options = {}) => {
+  const includeSlots = options.includeSlots !== false;
   const plain = (event && typeof event.toObject === 'function') ? event.toObject() : { ...(event || {}) };
   const canManage = canManageEvent(plain, viewerOpenid);
   const fullAccess = canManage || plain.isDecisionPublic === true;
-  const participants = (plain.participants || []).map(p => projectParticipant(p, viewerOpenid, fullAccess));
+  const participants = (plain.participants || []).map(
+    p => projectParticipant(p, viewerOpenid, fullAccess, includeSlots)
+  );
   return {
     ...plain,
     participants,
@@ -614,7 +669,7 @@ const sendSubscribeMessage = async (openid, event, retried = false) => {
 // ==========================================
 // 🌟 公开接口 (无需 Token)
 // ==========================================
-app.post('/api/login', async (req, res) => {
+app.post('/api/login', loginLimiter, async (req, res) => {
   const { code } = req.body || {};
   if (!code) return res.status(400).json({ success: false, error: '缺少 code' });
   try {
@@ -641,28 +696,40 @@ app.get('/api/announcement/latest', (req, res) => {
 
 // ==========================================
 // 1. 上传图片
-app.post('/api/upload', verifyToken, (req, res) => {
-  upload.single('file')(req, res, (err) => {
+app.post('/api/upload', verifyToken, uploadLimiter, (req, res) => {
+  upload.single('file')(req, res, async (err) => {
     if (err) {
       const msg = err.code === 'LIMIT_FILE_SIZE' ? '图片不能超过2MB' : err.message || '上传失败';
       return res.status(400).json({ success: false, error: msg });
     }
     if (!req.file) return res.status(400).json({ success: false, error: '无文件' });
 
-    // 只认文件头：声明 image/png 但实际是 HTML 的内容会被拒绝
-    const ext = detectImageExtension(req.file.buffer);
-    if (!ext) {
+    // 第一道闸：只认文件头，声明 image/png 但实际是 HTML 的内容直接拒绝
+    if (!detectImageExtension(req.file.buffer)) {
       return res.status(400).json({ success: false, error: '文件内容不是有效的图片' });
     }
 
-    const filename = `${Date.now()}_${Math.round(Math.random() * 1e9)}${ext}`;
-    fs.writeFile(path.join(uploadDir, filename), req.file.buffer, (writeError) => {
-      if (writeError) {
-        console.error('保存上传文件失败:', writeError);
-        return res.status(500).json({ success: false, error: '保存文件失败' });
-      }
-      res.json({ success: true, url: `${process.env.BASE_URL}/uploads/${filename}` });
-    });
+    // 第二道闸：真正解码后重新编码，丢掉一切附加内容（EXIF/脚本/超限尺寸），
+    // 输出格式固定为 JPEG，扩展名由服务端决定
+    try {
+      const processed = await sharp(req.file.buffer, { limitInputPixels: 30000000 })
+        .rotate() // 按 EXIF 方向摆正，随后元数据会被丢弃
+        .resize({ width: 512, height: 512, fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality: 85, mozjpeg: true })
+        .toBuffer();
+
+      const filename = `${Date.now()}_${Math.round(Math.random() * 1e9)}.jpg`;
+      fs.writeFile(path.join(uploadDir, filename), processed, (writeError) => {
+        if (writeError) {
+          console.error('保存上传文件失败:', writeError);
+          return res.status(500).json({ success: false, error: '保存文件失败' });
+        }
+        res.json({ success: true, url: `${process.env.BASE_URL}/uploads/${filename}` });
+      });
+    } catch (decodeError) {
+      console.error('图片解码失败:', decodeError.message);
+      return res.status(400).json({ success: false, error: '图片无法解析，请更换一张图片' });
+    }
   });
 });
 
@@ -728,13 +795,34 @@ app.post('/api/events', verifyToken, async (req, res) => {
 app.get('/api/events', verifyToken, async (req, res) => {
   try {
     const openid = req.user.openid;
-    const events = await Event.find({
+
+    const rawLimit = Number(req.query.limit);
+    const rawOffset = Number(req.query.offset);
+    const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(Math.floor(rawLimit), 200) : 50;
+    const offset = Number.isFinite(rawOffset) && rawOffset > 0 ? Math.floor(rawOffset) : 0;
+
+    const filter = {
       $or: [
         { creatorId: openid },
         { 'participants.openid': openid }
       ]
-    }).sort({ createdAt: -1 });
-    res.json({ success: true, data: events.map(event => projectEventForViewer(event, openid)) });
+    };
+
+    const [events, total] = await Promise.all([
+      Event.find(filter).sort({ createdAt: -1 }).skip(offset).limit(limit),
+      Event.countDocuments(filter)
+    ]);
+
+    res.json({
+      success: true,
+      data: events.map(event => projectEventForViewer(event, openid, { includeSlots: false })),
+      pagination: {
+        total,
+        limit,
+        offset,
+        hasMore: offset + events.length < total
+      }
+    });
   } catch (error) {
     res.status(500).json({ success: false, error: '获取失败' });
   }
