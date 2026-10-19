@@ -103,6 +103,6 @@ CORS_ORIGINS=*
 
 ### 列表接口分页
 
-`GET /api/events` 支持 `limit`（默认 50，上限 200）和 `offset`，
+`GET /api/events` 支持 `limit`（不传时按上限 200，上限 200）和 `offset`，
 响应里的 `pagination` 字段包含 `total` / `limit` / `offset` / `hasMore`。
 列表项**不返回**参与者的 `availableSlots`，只有详情接口会返回，用于控制响应体大小。

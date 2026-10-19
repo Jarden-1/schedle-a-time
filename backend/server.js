@@ -798,7 +798,8 @@ app.get('/api/events', verifyToken, async (req, res) => {
 
     const rawLimit = Number(req.query.limit);
     const rawOffset = Number(req.query.offset);
-    const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(Math.floor(rawLimit), 200) : 50;
+    // 不传 limit 时按上限返回，避免老版本小程序（不认识分页）被静默截断
+    const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(Math.floor(rawLimit), 200) : 200;
     const offset = Number.isFinite(rawOffset) && rawOffset > 0 ? Math.floor(rawOffset) : 0;
 
     const filter = {
