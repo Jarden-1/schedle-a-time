@@ -261,22 +261,47 @@ export default function Profile() {
 
       {showDebugPanel ? (
         <View className="debug-panel">
-          <View className="debug-panel-head">
-            <Text className="debug-panel-title">🧪 调试身份</Text>
-            <Text className="debug-panel-hint">仅调试用，切换会清空本地数据</Text>
+          <View className="debug-head">
+            <View className="debug-head-left">
+              <Text className="debug-badge">DEV</Text>
+              <Text className="debug-title">调试身份</Text>
+            </View>
+            <Text
+              className="debug-collapse"
+              onClick={() => { setDebugPanelEnabled(false); setShowDebugPanel(false); }}
+            >
+              收起
+            </Text>
           </View>
-          <View className="debug-panel-actions">
-            <View className="debug-btn" onClick={() => runDebugAction(() => switchToDebugIdentity())}>全新用户</View>
-            <View className="debug-btn" onClick={() => runDebugAction(() => switchToDebugIdentity('u_test_a'))}>测试 A</View>
-            <View className="debug-btn" onClick={() => runDebugAction(() => switchToDebugIdentity('u_test_b'))}>测试 B</View>
-            <View className="debug-btn debug-btn--primary" onClick={() => runDebugAction(switchToSelf)}>回到我自己</View>
+
+          <View className="debug-current">
+            <Text className="debug-current-label">当前身份</Text>
+            <Text className="debug-current-value">{displayNickName}</Text>
+            <Text className="debug-current-id">
+              {currentUser?.openid ? `${currentUser.openid.slice(0, 6)}…${currentUser.openid.slice(-4)}` : '未登录'}
+            </Text>
           </View>
-          <View
-            className="debug-panel-close"
-            onClick={() => { setDebugPanelEnabled(false); setShowDebugPanel(false); }}
-          >
-            关闭调试面板
+
+          <View className="debug-grid">
+            <View className="debug-item" onClick={() => runDebugAction(() => switchToDebugIdentity())}>
+              <Text className="debug-item-title">全新用户</Text>
+              <Text className="debug-item-desc">随机 openid，无历史数据</Text>
+            </View>
+            <View className="debug-item" onClick={() => runDebugAction(() => switchToDebugIdentity('u_test_a'))}>
+              <Text className="debug-item-title">测试 A</Text>
+              <Text className="debug-item-desc">固定账号 u_test_a</Text>
+            </View>
+            <View className="debug-item" onClick={() => runDebugAction(() => switchToDebugIdentity('u_test_b'))}>
+              <Text className="debug-item-title">测试 B</Text>
+              <Text className="debug-item-desc">固定账号 u_test_b</Text>
+            </View>
+            <View className="debug-item debug-item--primary" onClick={() => runDebugAction(switchToSelf)}>
+              <Text className="debug-item-title">回到我自己</Text>
+              <Text className="debug-item-desc">恢复真实微信身份</Text>
+            </View>
           </View>
+
+          <Text className="debug-foot">切换只清空本地缓存，不影响服务端已有数据</Text>
         </View>
       ) : null}
 

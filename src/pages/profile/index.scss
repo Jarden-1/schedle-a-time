@@ -337,53 +337,115 @@
 /* --- 调试身份面板（长按用户卡片开启） --- */
 .debug-panel {
   margin: 12px 16px 0;
-  padding: 14px 16px;
-  border-radius: 12px;
+  padding: 16px;
+  border-radius: 16px;
   background: #fff;
-  border: 1px dashed #d9d9d9;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
 
-  .debug-panel-head {
+  .debug-head {
     display: flex;
-    align-items: baseline;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .debug-head-left {
+    display: flex;
+    align-items: center;
     gap: 8px;
-    margin-bottom: 10px;
   }
 
-  .debug-panel-title {
-    font-size: 14px;
+  .debug-badge {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: #07c160;
+    background: #e8f7ee;
+    padding: 2px 7px;
+    border-radius: 5px;
+  }
+
+  .debug-title {
+    font-size: 15px;
     font-weight: 600;
-    color: #333;
+    color: #1f2329;
   }
 
-  .debug-panel-hint {
+  .debug-collapse {
+    font-size: 12px;
+    color: #9aa0a6;
+  }
+
+  .debug-current {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: #f7f8f8;
+  }
+
+  .debug-current-label {
+    font-size: 12px;
+    color: #8b9096;
+  }
+
+  .debug-current-value {
+    font-size: 13px;
+    font-weight: 600;
+    color: #1f2329;
+    max-width: 45%;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .debug-current-id {
+    margin-left: auto;
     font-size: 11px;
-    color: #a0a0a0;
+    color: #a5aab0;
   }
 
-  .debug-panel-actions {
+  .debug-grid {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
-  }
-
-  .debug-btn {
-    padding: 6px 14px;
-    border-radius: 999px;
-    background: #f3f5f4;
-    color: #333;
-    font-size: 13px;
-  }
-
-  .debug-btn--primary {
-    background: #e8f7ee;
-    color: #07c160;
-    font-weight: 600;
-  }
-
-  .debug-panel-close {
+    gap: 10px;
     margin-top: 12px;
-    font-size: 12px;
-    color: #a0a0a0;
+  }
+
+  .debug-item {
+    width: calc(50% - 5px);
+    padding: 12px 14px;
+    border-radius: 12px;
+    background: #f7f8f8;
+    border: 1px solid transparent;
+    box-sizing: border-box;
+  }
+
+  .debug-item--primary {
+    background: #eef9f2;
+    border-color: #cdecd9;
+  }
+
+  .debug-item-title {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+    color: #1f2329;
+  }
+
+  .debug-item-desc {
+    display: block;
+    margin-top: 2px;
+    font-size: 11px;
+    color: #9aa0a6;
+  }
+
+  .debug-foot {
+    display: block;
+    margin-top: 12px;
+    font-size: 11px;
+    color: #b0b4b8;
     text-align: center;
   }
 }

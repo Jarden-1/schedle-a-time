@@ -84,7 +84,12 @@ export const switchToDebugIdentity = async (openid?: string) => {
 
   const result = await requestRawAPI('/login', 'POST', { code: `__debug__:${target}` });
   if (!result?.success || !result?.data?.token) {
-    throw new Error(result?.error || '调试登录失败，请确认服务端已开启 ENABLE_DEBUG_IDENTITY');
+    const raw = String(result?.error || '');
+    // 服务端没开开关时，微信会返回 invalid code，这里翻译成人话
+    const friendly = /invalid code|40029|40163/i.test(raw)
+      ? '服务端未开启调试身份（ENABLE_DEBUG_IDENTITY）'
+      : (raw || '调试登录失败');
+    throw new Error(friendly);
   }
 
   clearLocalState();
