@@ -19,11 +19,22 @@ const mongoose = require('mongoose');
 const Event = require('../models/Event');
 const UserPreference = require('../models/UserPreference');
 
+const RESET_MARKER = 'reset_auto_apply_v1';
+
 const resetAutoApply = async () => {
+  // 这是一次性操作：用户之后手动打开的开关不能被重复部署覆盖掉
+  const db = mongoose.connection.db;
+  const marker = await db.collection('app_meta').findOne({ key: RESET_MARKER });
+  if (marker) {
+    console.log('[1/2] 「自动套用」已于之前重置过，跳过');
+    return;
+  }
+
   const result = await UserPreference.updateMany(
     {},
     { $set: { autoApplyWeeklyUnavailable: false, updatedAt: new Date().toISOString() } }
   );
+  await db.collection('app_meta').insertOne({ key: RESET_MARKER, at: new Date() });
   console.log(`[1/2] 已重置「自动套用」开关：匹配 ${result.matchedCount} 条，修改 ${result.modifiedCount} 条`);
 };
 

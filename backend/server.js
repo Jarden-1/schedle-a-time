@@ -737,9 +737,24 @@ const sendSubscribeMessage = async (openid, event, retried = false) => {
 // ==========================================
 // 🌟 公开接口 (无需 Token)
 // ==========================================
+// 🧪 调试身份通道：默认关闭，只有显式设置 ENABLE_DEBUG_IDENTITY=true 才生效。
+// 用途：用任意 openid 签发 token，方便模拟「全新用户 / 另一个参与者」。
 app.post('/api/login', loginLimiter, async (req, res) => {
   const { code } = req.body || {};
   if (!code) return res.status(400).json({ success: false, error: '缺少 code' });
+
+  if (process.env.ENABLE_DEBUG_IDENTITY === 'true'
+    && typeof code === 'string'
+    && code.startsWith('__debug__:')) {
+    const debugOpenid = code.slice('__debug__:'.length).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 64);
+    if (!debugOpenid) {
+      return res.status(400).json({ success: false, error: '调试身份不合法' });
+    }
+    console.log(`🧪 调试身份登录: ${debugOpenid}`);
+    const token = jwt.sign({ openid: debugOpenid }, process.env.JWT_SECRET, { expiresIn: '7d' });
+    return res.json({ success: true, data: { openid: debugOpenid, token, debug: true } });
+  }
+
   try {
     const wxApiUrl = `https://api.weixin.qq.com/sns/jscode2session?appid=${process.env.WX_APPID}&secret=${process.env.WX_APPSECRET}&js_code=${code}&grant_type=authorization_code`;
     const wxResponse = await axios.get(wxApiUrl, { timeout: 8000 });

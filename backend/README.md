@@ -115,6 +115,30 @@ CORS_ORIGINS=http://localhost:10086,https://example.com
 CORS_ORIGINS=*
 ```
 
+### 数据导出与错误查看
+
+```bash
+# 导出埋点原始事件为 CSV
+npm run analytics:export -- --from 2026-10-01 --to 2026-10-31
+npm run analytics:export -- --from 2026-10-01 --to 2026-10-31 --event select_submit
+
+# 查看最近错误（默认最近 7 天、30 条）
+npm run errors:recent
+npm run errors:recent -- --limit 100 --source miniapp --since 24
+```
+
+埋点保留 180 天、错误保留 30 天，靠 MongoDB TTL 索引自动过期。
+
+### 调试身份
+
+用于以「全新用户 / 另一个参与者」的视角调试，避免反复清缓存、换微信号。
+
+1. 服务端 `.env` 打开 `ENABLE_DEBUG_IDENTITY=true` 并重启
+2. 小程序「我的」页面**长按用户卡片**，出现调试面板
+3. 点「全新用户」「测试 A/B」或「回到我自己」切换
+
+用完把 `ENABLE_DEBUG_IDENTITY` 改回 `false`，接口层会拒绝调试登录。
+
 ### 列表接口分页
 
 `GET /api/events` 支持 `limit`（不传时按上限 200，上限 200）和 `offset`，

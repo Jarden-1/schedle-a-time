@@ -333,3 +333,57 @@
     }
   }
 }
+
+/* --- 调试身份面板（长按用户卡片开启） --- */
+.debug-panel {
+  margin: 12px 16px 0;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px dashed #d9d9d9;
+
+  .debug-panel-head {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .debug-panel-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #333;
+  }
+
+  .debug-panel-hint {
+    font-size: 11px;
+    color: #a0a0a0;
+  }
+
+  .debug-panel-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .debug-btn {
+    padding: 6px 14px;
+    border-radius: 999px;
+    background: #f3f5f4;
+    color: #333;
+    font-size: 13px;
+  }
+
+  .debug-btn--primary {
+    background: #e8f7ee;
+    color: #07c160;
+    font-weight: 600;
+  }
+
+  .debug-panel-close {
+    margin-top: 12px;
+    font-size: 12px;
+    color: #a0a0a0;
+    text-align: center;
+  }
+}

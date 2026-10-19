@@ -3,6 +3,7 @@ import { View, Text, Button, Image, Input } from '@tarojs/components';
 import { useState, useMemo, useCallback, useRef } from 'react';
 import { useAppStore } from '@/store';
 import { uploadAvatarToServer } from '@/services/avatar';
+import { isDebugPanelEnabled, setDebugPanelEnabled, switchToDebugIdentity, switchToSelf } from '@/services/debugIdentity';
 import { buildUserProfile, hasCompleteUserProfile } from '@/utils';
 import './index.scss';
 import { usePageView } from '@/hooks/usePageView';
@@ -25,12 +26,14 @@ export default function Profile() {
 
   useDidShow(() => {
     setTabIndex(1);
+    setShowDebugPanel(isDebugPanelEnabled());
     // 🚨 核心修复：每次切到“我的”页面，强制从全局拉取最新数据，解决删除了数字不掉的 Bug！
     fetchEvents();
     fetchLatestAnnouncementAPI();
   });
 
   const [showNicknameModal, setShowNicknameModal] = useState(false);
+  const [showDebugPanel, setShowDebugPanel] = useState(false);
 
   const [avatarPreview, setAvatarPreview] = useState('');
   const [avatarFileId, setAvatarFileId] = useState('');
@@ -161,6 +164,23 @@ export default function Profile() {
     resetPendingProfile();
   }, [resetPendingProfile, saving]);
 
+  const runDebugAction = useCallback(async (action: () => Promise<void>) => {
+    try {
+      Taro.showLoading({ title: '切换中' });
+      await action();
+    } catch (error: any) {
+      Taro.hideLoading();
+      Taro.showToast({ title: error?.message || '切换失败', icon: 'none' });
+    }
+  }, []);
+
+  const toggleDebugPanel = () => {
+    const next = !isDebugPanelEnabled();
+    setDebugPanelEnabled(next);
+    setShowDebugPanel(next);
+    Taro.showToast({ title: next ? '调试面板已开启' : '调试面板已关闭', icon: 'none' });
+  };
+
   const handleLogout = () => {
     Taro.showModal({
       title: '确认退出登录',
@@ -224,7 +244,7 @@ export default function Profile() {
 
   return (
     <View className="profile-page">
-      <View className="user-card" onClick={handleEditProfile}>
+      <View className="user-card" onClick={handleEditProfile} onLongPress={toggleDebugPanel}>
         <View className="avatar">
           {displayAvatarUrl ? (
             <Image className="avatar-img" src={displayAvatarUrl} mode="aspectFill" />
@@ -238,6 +258,27 @@ export default function Profile() {
           <Text className="user-id">{isProfileIncomplete ? '点击此处授权登录获取完整体验' : '微信用户'}</Text>
         </View>
       </View>
+
+      {showDebugPanel ? (
+        <View className="debug-panel">
+          <View className="debug-panel-head">
+            <Text className="debug-panel-title">🧪 调试身份</Text>
+            <Text className="debug-panel-hint">仅调试用，切换会清空本地数据</Text>
+          </View>
+          <View className="debug-panel-actions">
+            <View className="debug-btn" onClick={() => runDebugAction(() => switchToDebugIdentity())}>全新用户</View>
+            <View className="debug-btn" onClick={() => runDebugAction(() => switchToDebugIdentity('u_test_a'))}>测试 A</View>
+            <View className="debug-btn" onClick={() => runDebugAction(() => switchToDebugIdentity('u_test_b'))}>测试 B</View>
+            <View className="debug-btn debug-btn--primary" onClick={() => runDebugAction(switchToSelf)}>回到我自己</View>
+          </View>
+          <View
+            className="debug-panel-close"
+            onClick={() => { setDebugPanelEnabled(false); setShowDebugPanel(false); }}
+          >
+            关闭调试面板
+          </View>
+        </View>
+      ) : null}
 
       {showNicknameModal ? (
         <View className="nickname-modal-mask">
