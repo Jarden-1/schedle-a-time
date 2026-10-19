@@ -276,11 +276,15 @@ export default function EventDetail() {
     p?.hasSubmitted === true || (Array.isArray(p?.availableSlots) && p.availableSlots.length > 0)
   );
 
-  const hasSubmitted = !!event?.participants.some(p => {
-    // 🚨 有 openid 时只认 openid，否则同名用户会被误判成「我已提交」
-    const isMe = myOpenid ? p.openid === myOpenid : (!!selfNick && p.nickName === selfNick);
-    return isMe && participantHasSubmitted(p);
-  });
+  const myParticipant = event?.participants.find(p => (
+    myOpenid ? p.openid === myOpenid : (!!selfNick && p.nickName === selfNick)
+  ));
+
+  const hasSubmitted = !!myParticipant && participantHasSubmitted(myParticipant);
+
+  // 已提交但一个时段都没选（明确表示「全部没空」）
+  const submittedWithoutSlots = hasSubmitted
+    && !(Array.isArray(myParticipant?.availableSlots) && myParticipant!.availableSlots.length > 0);
 
   // 🚨 优先用服务端下发的已填写人数（决策不公开时他人时段会被裁剪）
   const submittedCount = typeof event?.submittedCount === 'number'
@@ -488,7 +492,9 @@ export default function EventDetail() {
           </View>
         ) : hasSubmitted ? (
           <View className="status-content">
-            <Text className="status-text success">✅ 已提交空闲时间</Text>
+            <Text className="status-text success">
+              {submittedWithoutSlots ? '✅ 已提交（当前全部没空）' : '✅ 已提交空闲时间'}
+            </Text>
             <Button
               className="btn-outline"
               size="mini"

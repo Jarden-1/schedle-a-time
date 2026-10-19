@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "test": "node scripts/regression-test.js && node scripts/smoke-test.js && node scripts/integration-test.js",
-    "migrate:backfill": "node scripts/backfill-data.js"
+    "migrate:backfill": "node scripts/backfill-data.js",
+    "migrate:after-deploy": "node scripts/after-deploy.js"
   },
   "keywords": [],
   "author": "",

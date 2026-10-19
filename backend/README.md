@@ -18,6 +18,7 @@ prebuilt binary.
 
 - `npm test`: run regression, smoke and integration tests
 - `npm run migrate:backfill`: backfill historical event data
+- `npm run migrate:after-deploy`: 部署后执行一次的数据迁移（重置「自动套用」开关、补齐 `hasSubmitted`）
 
 ## Runtime Notes
 
@@ -27,6 +28,19 @@ prebuilt binary.
 - Secrets must stay in `.env`; do not commit production credentials.
 
 ## Deployment
+
+### 首次部署新版本时执行一次迁移
+
+```bash
+cd backend
+npm run migrate:after-deploy
+```
+
+做两件事，均可重复执行：
+
+1. 把所有用户的「参与活动时自动套用常规不可用时段」重置为**关闭**。
+   旧版本这个开关缺省是「开」，存量数据已经存成了 `true`，只改代码默认值不会回退。
+2. 给历史参与者补 `hasSubmitted` 字段，让「提交了空时间」的成员不再显示成未填写。
 
 ### 必须单实例 fork 模式
 
