@@ -8,6 +8,16 @@ import './index.scss';
 type GridCell = { slotKey: string; row: number; col: number; };
 type DragMode = 'select' | 'erase';
 
+/**
+ * 长按判定参数。
+ *
+ * iOS 的 touchmove 采样更早也更密，手指按下后几乎立刻会产生几像素的抖动。
+ * 原来「350ms + 8px」的组合会让长按几乎必然被取消，用户一拖就变成页面滚动。
+ * 这里放宽到 250ms + 24px：小幅抖动不再取消长按，真正想滚动的人很快就能超过 24px。
+ */
+const LONG_PRESS_MS = 250;
+const MOVE_CANCEL_DISTANCE = 24;
+
 type Props = {
   slotKeys: string[];
   selected: Set<string>;
@@ -255,7 +265,7 @@ export default function TimeGridSelector(props: Props) {
           enterDragMode(pos, true);
         }
       });
-    }, 350);
+    }, LONG_PRESS_MS);
   }, [enabled, enterDragMode, forceDragMode, measureGrid, pointToCell, readonlyMode]);
 
   const onTouchMove = useCallback((e: any) => {
@@ -266,7 +276,7 @@ export default function TimeGridSelector(props: Props) {
     if (!draggingRef.current) {
       const dx = t.clientX - session.startX;
       const dy = t.clientY - session.startY;
-      if (dx * dx + dy * dy <= 64) return;
+      if (dx * dx + dy * dy <= MOVE_CANCEL_DISTANCE * MOVE_CANCEL_DISTANCE) return;
 
       session.moved = true;
       clearLongPressTimer();
@@ -352,6 +362,8 @@ export default function TimeGridSelector(props: Props) {
         </View>
       </View>
 
+      {/* 拖选期间不切换 scrollX：中途改 overflow-x 可能让横向位置跳回原点，
+          横向锁定交给外层 View 的 catchMove（catchtouchmove 会同时冻结祖先 scroll-view 的滚动） */}
       <ScrollView
         className="time-grid-scroll"
         scrollX={!forceDragMode}
