@@ -21,6 +21,7 @@ let errorQueue: any[] = [];
 let flushTimer: any = null;
 let flushing = false;
 let currentPage = '';
+let deviceInfo: { platform: string; system: string; brand: string } | null = null;
 let sessionId = '';
 let lastActiveAt = 0;
 
@@ -105,7 +106,19 @@ export const track = (event: string, props?: TrackProps) => pushEvent(event, pro
 /** 页面浏览：进入页面时调用 */
 export const trackPageView = (page: string) => {
   currentPage = page;
-  pushEvent(TRACK.PAGE_VIEW, { page });
+  if (!deviceInfo) {
+    try {
+      const info: any = Taro.getSystemInfoSync();
+      deviceInfo = {
+        platform: String(info?.platform || ''),
+        system: String(info?.system || '').slice(0, 20),
+        brand: String(info?.brand || '')
+      };
+    } catch {
+      deviceInfo = { platform: '', system: '', brand: '' };
+    }
+  }
+  pushEvent(TRACK.PAGE_VIEW, { page, ...(deviceInfo || {}) });
 };
 
 /** 页面离开：带上停留时长（毫秒） */

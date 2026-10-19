@@ -1,6 +1,6 @@
-import Taro, { useLoad, usePageScroll } from '@tarojs/taro';
+import Taro, { useLoad } from '@tarojs/taro';
 import { View, Text, Button, Switch } from '@tarojs/components';
-import { useMemo, useState, useRef } from 'react';
+import { useMemo, useState } from 'react';
 import { useAppStore } from '@/store';
 import TimeGridSelector from '@/components/TimeGridSelector';
 import Loading from '@/components/Loading';
@@ -18,10 +18,6 @@ import { track } from '@/services/telemetry';
 import { TRACK } from '@/constants/app';
 
 export default function WeeklyUnavailablePage() {
-  // 记录页面滚动距离，供网格换算「手指位置 -> 格子」时补偿
-  const pageScrollTopRef = useRef(0);
-  usePageScroll(({ scrollTop }) => { pageScrollTopRef.current = scrollTop; });
-
   usePageView('weekly_unavailable');
   const {
     currentUser,
@@ -152,7 +148,6 @@ export default function WeeklyUnavailablePage() {
           forceDragMode={forceDragMode}
           selectedTone="red"
           showHeaderDate={false}
-          scrollTopRef={pageScrollTopRef}
         />
       </View>
 

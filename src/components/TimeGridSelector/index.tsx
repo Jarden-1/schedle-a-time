@@ -8,18 +8,6 @@ import './index.scss';
 type GridCell = { slotKey: string; row: number; col: number; };
 type DragMode = 'select' | 'erase';
 
-/**
- * 拖选时的边缘自动滚动。
- *
- * 原生滚动是「内容跟着手指走」，拖选时方向正好相反：想选下面的格子，
- * 屏幕却往上翻出上面已经看过的部分。所以手指拖到屏幕上下边缘并停住时，
- * 由我们主动滚动页面 —— 贴下边缘 → scrollTop 增大（内容上移，下面格子出来），
- * 贴上边缘反之。速度按离边缘的远近线性衰减，不会失控。
- */
-const EDGE_ZONE = 80;      // 距离边缘多少像素内触发
-const EDGE_TICK_MS = 50;   // 每 50ms 滚一次
-const EDGE_STEP_PX = 10;   // 贴边时的单次步长
-
 type Props = {
   slotKeys: string[];
   selected: Set<string>;
@@ -34,14 +22,6 @@ type Props = {
   selectedTone?: 'green' | 'red';
   hintedKeys?: Set<string>;
   showHeaderDate?: boolean;
-  /**
-   * 当前页面滚动距离（由宿主页面用 usePageScroll 维护的 ref）。
-   *
-   * 长按拖选时页面会跟着手指滚动，如果不把这个偏移算进去，
-   * 「手指位置 → 格子」的换算会随着滚动越来越偏，
-   * 表现为选中区域一路狂飙、根本跟不上手指。
-   */
-  scrollTopRef?: { current: number };
 };
 
 type GridRowProps = {
@@ -145,8 +125,7 @@ export default function TimeGridSelector(props: Props) {
     heatmapCountData,
     selectedTone = 'green',
     hintedKeys,
-    showHeaderDate = true,
-    scrollTopRef
+    showHeaderDate = true
   } = props;
 
   const wrapperId = useMemo(() => `time-grid-${Math.random().toString(36).slice(2)}`, []);
@@ -195,7 +174,7 @@ export default function TimeGridSelector(props: Props) {
     return arr;
   }, [gridSize.cols, gridSize.rows, slotIndex]);
 
-  const gridMetricsRef = useRef({ left: 0, top: 0, cellW: 0, cellH: 0, scrollTop: 0 });
+  const gridMetricsRef = useRef({ left: 0, top: 0, cellW: 0, cellH: 0 });
 
   const touchSessionRef = useRef({
     id: 0,
@@ -214,8 +193,6 @@ export default function TimeGridSelector(props: Props) {
   };
 
 
-  const edgeTimerRef = useRef<any>(null);
-  const fingerYRef = useRef(0);
   const draggingRef = useRef(false);
   const dragStartRef = useRef<{ row: number; col: number } | null>(null);
   const dragModeRef = useRef<DragMode>('select');
@@ -246,11 +223,9 @@ export default function TimeGridSelector(props: Props) {
       query.select(`#${wrapperId}-cell-0-1`).boundingClientRect();
       query.select(`#${wrapperId}-cell-1-0`).boundingClientRect();
       query.select(`#${wrapperId}`).boundingClientRect();
-      // 同一次查询里取页面滚动位置，保证 rect 与 scrollTop 是同一时刻的
-      query.selectViewport().scrollOffset();
 
       query.exec((res) => {
-        const [c00, c01, c10, wrap, viewport] = res;
+        const [c00, c01, c10, wrap] = res;
         if (c00) {
           let cellW = c00.width;
           let cellH = c00.height;
@@ -260,13 +235,7 @@ export default function TimeGridSelector(props: Props) {
           if (c10) cellH = c10.top - c00.top;
           else if (wrap) cellH = wrap.height / gridSize.rows;
 
-          gridMetricsRef.current = {
-            left: c00.left,
-            top: c00.top,
-            cellW,
-            cellH,
-            scrollTop: viewport?.scrollTop || 0
-          };
+          gridMetricsRef.current = { left: c00.left, top: c00.top, cellW, cellH };
         }
         resolve();
       });
@@ -274,21 +243,17 @@ export default function TimeGridSelector(props: Props) {
   }, [gridSize, wrapperId]);
 
   const pointToCell = useCallback((clientX: number, clientY: number) => {
-    const { left, top, cellW, cellH, scrollTop } = gridMetricsRef.current;
+    const { left, top, cellW, cellH } = gridMetricsRef.current;
     if (!cellW || !cellH) return null;
 
-    // 页面滚动后表格整体上移，按滚动差值把测量时的 top 换算到当前位置
-    const currentScrollTop = scrollTopRef?.current ?? scrollTop;
-    const correctedTop = top - (currentScrollTop - scrollTop);
-
     const col = Math.floor((clientX - left) / cellW);
-    const row = Math.floor((clientY - correctedTop) / cellH);
+    const row = Math.floor((clientY - top) / cellH);
 
     return {
       row: clamp(row, 0, gridSize.rows - 1),
       col: clamp(col, 0, gridSize.cols - 1)
     };
-  }, [gridSize, scrollTopRef]);
+  }, [gridSize]);
 
   const applyRect = useCallback((start: { row: number; col: number }, end: { row: number; col: number }) => {
     const minRow = Math.min(start.row, end.row);
@@ -311,41 +276,6 @@ export default function TimeGridSelector(props: Props) {
     setRenderSelected(next);
   }, [cellKeyByPos]);
 
-  const stopEdgeScroll = useCallback(() => {
-    if (edgeTimerRef.current) {
-      clearInterval(edgeTimerRef.current);
-      edgeTimerRef.current = null;
-    }
-  }, []);
-
-  // 组件卸载时确保定时器被清掉
-  useEffect(() => () => stopEdgeScroll(), [stopEdgeScroll]);
-
-  const startEdgeScroll = useCallback(() => {
-    if (edgeTimerRef.current) return;
-
-    let windowHeight = 0;
-    try { windowHeight = Taro.getSystemInfoSync().windowHeight || 0; } catch { windowHeight = 0; }
-    if (!windowHeight) return;
-
-    edgeTimerRef.current = setInterval(() => {
-      const y = fingerYRef.current;
-      let delta = 0;
-
-      if (y < EDGE_ZONE) {
-        // 贴近顶部：内容下移，露出上方格子
-        delta = -(1 - y / EDGE_ZONE) * EDGE_STEP_PX;
-      } else if (y > windowHeight - EDGE_ZONE) {
-        // 贴近底部：内容上移，露出下方格子
-        delta = (1 - (windowHeight - y) / EDGE_ZONE) * EDGE_STEP_PX;
-      }
-
-      if (Math.abs(delta) < 1) return;
-      const next = Math.max(0, (scrollTopRef?.current ?? 0) + delta);
-      Taro.pageScrollTo({ scrollTop: next, duration: 0 });
-    }, EDGE_TICK_MS);
-  }, [scrollTopRef]);
-
   const enterDragMode = useCallback((startPos: { row: number; col: number }, showHint: boolean) => {
     if (draggingRef.current) return;
 
@@ -360,9 +290,8 @@ export default function TimeGridSelector(props: Props) {
     if (showHint && !forceDragMode) {
       Taro.showToast({ title: '别松手，滑动即可多选', icon: 'none', duration: 1500 });
     }
-    startEdgeScroll();
     applyRect(startPos, startPos);
-  }, [applyRect, cellKeyByPos, forceDragMode, startEdgeScroll]);
+  }, [applyRect, cellKeyByPos, forceDragMode]);
 
   const commitSelection = useCallback((next: Set<string>) => {
     const committed = new Set(next);
@@ -392,7 +321,6 @@ export default function TimeGridSelector(props: Props) {
 
     session.startX = t.clientX;
     session.startY = t.clientY;
-    fingerYRef.current = t.clientY;
     session.moved = false;
     session.ended = false;
 
@@ -420,7 +348,6 @@ export default function TimeGridSelector(props: Props) {
   const onTouchMove = useCallback((e: any) => {
     if (readonlyMode || !enabled) return;
     const t = e.touches[0];
-    fingerYRef.current = t.clientY;
     const session = touchSessionRef.current;
 
     if (!draggingRef.current) {
@@ -466,7 +393,6 @@ export default function TimeGridSelector(props: Props) {
     clearLongPressTimer();
 
     if (draggingRef.current) {
-      stopEdgeScroll();
       commitSelection(tempSelectedRef.current);
       draggingRef.current = false;
       setIsDragging(false);
@@ -484,7 +410,7 @@ export default function TimeGridSelector(props: Props) {
         if (pos) handleSingleClick(pos);
       });
     }
-  }, [commitSelection, enabled, handleSingleClick, readonlyMode, measureGrid, pointToCell, stopEdgeScroll]);
+  }, [commitSelection, enabled, handleSingleClick, readonlyMode, measureGrid, pointToCell]);
 
   return (
     // 🎯 修复 2：彻底移除外部动态包裹的 catchMove，完全交给底部的【多选】按钮去接管
