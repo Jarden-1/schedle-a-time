@@ -5,7 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node scripts/smoke-test.js && node scripts/integration-test.js",
+    "test": "node scripts/regression-test.js && node scripts/smoke-test.js && node scripts/integration-test.js",
     "migrate:backfill": "node scripts/backfill-data.js"
   },
   "keywords": [],

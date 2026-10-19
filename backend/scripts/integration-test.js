@@ -115,6 +115,83 @@ const cleanup = async () => {
 
     await expectStatus('PUT', `/api/events/${eventId}`, ownerToken, { dateRange: { start: '2026-05-10', end: '2026-05-09' } }, 400);
 
+    // ---------- 回归：提交校验 ----------
+    await expectStatus('POST', `/api/events/${eventId}/availability`, otherToken, {
+      nickName: 'Other',
+      availableSlots: ['2026-05-09_09:00-09:30', '2026-05-09_09:00-09:30']
+    }, 200);
+
+    const dupRes = await expectStatus('GET', `/api/events/${eventId}`, ownerToken, undefined, 200);
+    const otherParticipant = dupRes.data?.data?.participants?.find(p => p.openid === otherOpenid);
+    if (!otherParticipant || otherParticipant.availableSlots.length !== 1) {
+      throw new Error('duplicate slots were not deduplicated');
+    }
+    if (otherParticipant.hasSubmitted !== true) {
+      throw new Error('hasSubmitted was not persisted');
+    }
+
+    // 不在活动网格内的时间必须被拒绝
+    await expectStatus('POST', `/api/events/${eventId}/availability`, otherToken, {
+      nickName: 'Other',
+      availableSlots: ['2026-05-09_10:00-10:30']
+    }, 400);
+
+    // 越界的确认时间必须被拒绝
+    await expectStatus('POST', `/api/events/${eventId}/confirm`, ownerToken, {
+      confirmedSlots: [{ date: '2026-05-10', startTime: '09:00', endTime: '09:30' }]
+    }, 400);
+
+    // ---------- 回归：改范围后清理旧投票 ----------
+    const pruneRes = await expectStatus('PUT', `/api/events/${eventId}`, ownerToken, {
+      dateRange: { start: '2026-05-10', end: '2026-05-10' }
+    }, 200);
+    if ((pruneRes.data?.pruned?.slots || 0) < 1) {
+      throw new Error('range change did not prune stale slots');
+    }
+    await expectStatus('PUT', `/api/events/${eventId}`, ownerToken, {
+      dateRange: { start: '2026-05-09', end: '2026-05-09' }
+    }, 200);
+
+    // ---------- 回归：角色层级 ----------
+    await expectStatus('POST', `/api/events/${eventId}/members`, ownerToken, {
+      action: 'SET_ADMIN',
+      targetOpenid: otherOpenid
+    }, 200);
+    await expectStatus('PUT', `/api/events/${eventId}`, otherToken, { title: 'Admin Renamed' }, 200);
+
+    // 改名后再次提交，别名与身份字段不应丢失（历史实现用 ...existing 展开子文档会丢字段）
+    await expectStatus('POST', `/api/events/${eventId}/members`, ownerToken, {
+      action: 'RENAME_MEMBER',
+      targetOpenid: otherOpenid,
+      targetDisplayName: 'Other Alias'
+    }, 200);
+    await expectStatus('POST', `/api/events/${eventId}/availability`, otherToken, {
+      nickName: 'Other',
+      availableSlots: ['2026-05-09_09:00-09:30']
+    }, 200);
+
+    const afterResubmit = await expectStatus('GET', `/api/events/${eventId}`, ownerToken, undefined, 200);
+    const renamed = afterResubmit.data?.data?.participants?.find(p => p.openid === otherOpenid);
+    if (renamed?.eventDisplayName !== 'Other Alias') {
+      throw new Error('eventDisplayName was lost after re-submitting availability');
+    }
+    if (renamed?.userId !== otherOpenid) {
+      throw new Error('userId was lost after re-submitting availability');
+    }
+
+    // 普通管理员不能任免管理员
+    await expectStatus('POST', `/api/events/${eventId}/members`, otherToken, {
+      action: 'SET_ADMIN',
+      targetOpenid: ownerOpenid
+    }, 403);
+
+    // 被移除的管理员立刻失去权限
+    await expectStatus('POST', `/api/events/${eventId}/members`, ownerToken, {
+      action: 'KICK_MEMBER',
+      targetOpenid: otherOpenid
+    }, 200);
+    await expectStatus('PUT', `/api/events/${eventId}`, otherToken, { title: 'Hacked After Kick' }, 403);
+
     const confirmRes = await expectStatus('POST', `/api/events/${eventId}/confirm`, ownerToken, {
       confirmedSlots: [
         { date: '2026-05-09', startTime: '09:00', endTime: '09:30' },
@@ -124,6 +201,15 @@ const cleanup = async () => {
     if (!Array.isArray(confirmRes.data?.data?.confirmedSlots) || confirmRes.data.data.confirmedSlots.length !== 2) {
       throw new Error('confirmedSlots array was not persisted');
     }
+
+    // ---------- 回归：确认后不再接受提交 / 不再允许改范围 ----------
+    await expectStatus('POST', `/api/events/${eventId}/availability`, ownerToken, {
+      nickName: 'Owner',
+      availableSlots: ['2026-05-09_09:00-09:30']
+    }, 409);
+    await expectStatus('PUT', `/api/events/${eventId}`, ownerToken, {
+      timeRange: { start: '09:30', end: '10:30' }
+    }, 409);
 
     await cleanup();
     console.log('integration smoke test completed');
