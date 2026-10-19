@@ -1603,45 +1603,48 @@
   }
 }
 
-/* --- 决策页：没有任何可用时段时的提示卡片 ---
-   独立成卡片，避免像裸文本一样贴在灰色背景上；
-   order 0 让它排在热力图（order 1）之前。 */
-.decision-page .decision-empty-note {
+/* --- 决策页：没有任何可用时段时的空状态 ---
+   占满 header 以下的剩余空间并居中，避免大片空白。 */
+.decision-page .decision-empty-state {
   order: 0;
+  flex: 1;
   display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  margin: 12px 16px 0;
-  padding: 12px 14px;
-  border-radius: 12px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 40px 96px;
   box-sizing: border-box;
-  background: #fff;
-  border: 1px solid #ececec;
 
-  .note-icon {
-    flex-shrink: 0;
-    font-size: 14px;
-    line-height: 1.5;
+  .empty-icon-wrap {
+    width: 88px;
+    height: 88px;
+    border-radius: 50%;
+    background: #e9eeec;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 18px;
   }
 
-  .note-body {
-    flex: 1;
-    min-width: 0;
+  .empty-icon {
+    font-size: 38px;
+    line-height: 1;
   }
 
-  .note-title {
+  .empty-title {
     display: block;
-    font-size: 14px;
+    font-size: 16px;
     font-weight: 600;
-    color: #1f2329;
+    color: #333;
     line-height: 1.4;
   }
 
-  .note-desc {
+  .empty-tip {
     display: block;
-    margin-top: 3px;
+    margin-top: 6px;
     font-size: 13px;
-    color: #6b7280;
-    line-height: 1.55;
+    color: #9ca3af;
+    line-height: 1.5;
+    text-align: center;
   }
 }

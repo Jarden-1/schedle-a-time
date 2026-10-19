@@ -294,10 +294,9 @@ export default function DecisionPanel() {
       )).length;
 
   // 🚨 完全没有人有空时不提供选择与确认，只做状态提示
-  const emptyHintTitle = submittedCount > 0 ? '没有任何时段有人有空' : '还没有人填写时间';
-  const emptyHintDesc = submittedCount > 0
-    ? `${submittedCount} 人已填写，但所有时段都没空。可以回到详情页调整时间范围，让大家重新填写。`
-    : '把活动分享给参与者，等大家填写后再来确认时间。';
+  const emptyState = submittedCount > 0
+    ? { icon: '🗓', title: '没有人有空', tip: '调整时间范围后可重新收集' }
+    : { icon: '📭', title: '还没有人填写', tip: '先把活动分享给参与者' };
 
   // 精选 Top 3，更多探索交给热力图
   const topMergedSlots = useMemo(() => bestWindows.slice(0, 3), [bestWindows]);
@@ -525,12 +524,12 @@ export default function DecisionPanel() {
           </View>
         </>
       ) : (
-        <View className="decision-empty-note">
-          <Text className="note-icon">💡</Text>
-          <View className="note-body">
-            <Text className="note-title">{emptyHintTitle}</Text>
-            <Text className="note-desc">{emptyHintDesc}</Text>
+        <View className="decision-empty-state">
+          <View className="empty-icon-wrap">
+            <Text className="empty-icon">{emptyState.icon}</Text>
           </View>
+          <Text className="empty-title">{emptyState.title}</Text>
+          <Text className="empty-tip">{emptyState.tip}</Text>
         </View>
       )}
 
