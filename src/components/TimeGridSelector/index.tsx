@@ -22,6 +22,14 @@ type Props = {
   selectedTone?: 'green' | 'red';
   hintedKeys?: Set<string>;
   showHeaderDate?: boolean;
+  /**
+   * 当前页面滚动距离（由宿主页面用 usePageScroll 维护的 ref）。
+   *
+   * 长按拖选时页面会跟着手指滚动，如果不把这个偏移算进去，
+   * 「手指位置 → 格子」的换算会随着滚动越来越偏，
+   * 表现为选中区域一路狂飙、根本跟不上手指。
+   */
+  scrollTopRef?: { current: number };
 };
 
 type GridRowProps = {
@@ -125,7 +133,8 @@ export default function TimeGridSelector(props: Props) {
     heatmapCountData,
     selectedTone = 'green',
     hintedKeys,
-    showHeaderDate = true
+    showHeaderDate = true,
+    scrollTopRef
   } = props;
 
   const wrapperId = useMemo(() => `time-grid-${Math.random().toString(36).slice(2)}`, []);
@@ -174,7 +183,7 @@ export default function TimeGridSelector(props: Props) {
     return arr;
   }, [gridSize.cols, gridSize.rows, slotIndex]);
 
-  const gridMetricsRef = useRef({ left: 0, top: 0, cellW: 0, cellH: 0 });
+  const gridMetricsRef = useRef({ left: 0, top: 0, cellW: 0, cellH: 0, scrollTop: 0 });
 
   const touchSessionRef = useRef({
     id: 0,
@@ -223,9 +232,11 @@ export default function TimeGridSelector(props: Props) {
       query.select(`#${wrapperId}-cell-0-1`).boundingClientRect();
       query.select(`#${wrapperId}-cell-1-0`).boundingClientRect();
       query.select(`#${wrapperId}`).boundingClientRect();
+      // 同一次查询里取页面滚动位置，保证 rect 与 scrollTop 是同一时刻的
+      query.selectViewport().scrollOffset();
 
       query.exec((res) => {
-        const [c00, c01, c10, wrap] = res;
+        const [c00, c01, c10, wrap, viewport] = res;
         if (c00) {
           let cellW = c00.width;
           let cellH = c00.height;
@@ -235,7 +246,13 @@ export default function TimeGridSelector(props: Props) {
           if (c10) cellH = c10.top - c00.top;
           else if (wrap) cellH = wrap.height / gridSize.rows;
 
-          gridMetricsRef.current = { left: c00.left, top: c00.top, cellW, cellH };
+          gridMetricsRef.current = {
+            left: c00.left,
+            top: c00.top,
+            cellW,
+            cellH,
+            scrollTop: viewport?.scrollTop || 0
+          };
         }
         resolve();
       });
@@ -243,17 +260,21 @@ export default function TimeGridSelector(props: Props) {
   }, [gridSize, wrapperId]);
 
   const pointToCell = useCallback((clientX: number, clientY: number) => {
-    const { left, top, cellW, cellH } = gridMetricsRef.current;
+    const { left, top, cellW, cellH, scrollTop } = gridMetricsRef.current;
     if (!cellW || !cellH) return null;
 
+    // 页面滚动后表格整体上移，按滚动差值把测量时的 top 换算到当前位置
+    const currentScrollTop = scrollTopRef?.current ?? scrollTop;
+    const correctedTop = top - (currentScrollTop - scrollTop);
+
     const col = Math.floor((clientX - left) / cellW);
-    const row = Math.floor((clientY - top) / cellH);
+    const row = Math.floor((clientY - correctedTop) / cellH);
 
     return {
       row: clamp(row, 0, gridSize.rows - 1),
       col: clamp(col, 0, gridSize.cols - 1)
     };
-  }, [gridSize]);
+  }, [gridSize, scrollTopRef]);
 
   const applyRect = useCallback((start: { row: number; col: number }, end: { row: number; col: number }) => {
     const minRow = Math.min(start.row, end.row);

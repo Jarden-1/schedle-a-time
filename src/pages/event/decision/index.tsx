@@ -1,4 +1,4 @@
-import Taro, { useLoad } from '@tarojs/taro';
+import Taro, { useLoad, usePageScroll } from '@tarojs/taro';
 import { View, Text, Button, ScrollView, Image, Slider } from '@tarojs/components';
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { Event, CandidateSlot, TimeMode } from '@/types';
@@ -14,6 +14,10 @@ import { track } from '@/services/telemetry';
 import { TRACK } from '@/constants/app';
 
 export default function DecisionPanel() {
+  // 记录页面滚动距离，供网格换算「手指位置 -> 格子」时补偿
+  const pageScrollTopRef = useRef(0);
+  usePageScroll(({ scrollTop }) => { pageScrollTopRef.current = scrollTop; });
+
   usePageView('event_decision');
   const [event, setEvent] = useState<Event | null>(null);
 
@@ -557,6 +561,7 @@ export default function DecisionPanel() {
                   forceDragMode={forceDragMode}
                   heatmapData={heatmapData}
                   heatmapCountData={heatmapCountData}
+                  scrollTopRef={pageScrollTopRef}
                 />
               </View>
             </View>

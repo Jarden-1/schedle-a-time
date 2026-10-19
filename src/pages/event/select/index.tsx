@@ -1,6 +1,6 @@
-import Taro, { useLoad } from '@tarojs/taro';
+import Taro, { useLoad, usePageScroll } from '@tarojs/taro';
 import { View, Text, Button, ScrollView, Image } from '@tarojs/components';
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useRef } from 'react';
 import { Event, TimeMode } from '@/types';
 import { useAppStore } from '@/store';
 import { buildUserProfile, formatDate, generateDateSlots, generateTimeSlots, hasCompleteUserProfile, mapWeeklyUnavailableToEventSlots, parseSlotKey } from '@/utils';
@@ -18,6 +18,10 @@ const TEMPLATE_ID = 'WENxWVN5m0myVwQAeA99G9ryFIhFHu5hcQFb1BLaSJU';
 const PRESET_UNAVAILABLE_TIP_KEY = 'guide_preset_unavailable_seen';
 
 export default function SelectTime() {
+  // 记录页面滚动距离，供网格换算「手指位置 -> 格子」时补偿
+  const pageScrollTopRef = useRef(0);
+  usePageScroll(({ scrollTop }) => { pageScrollTopRef.current = scrollTop; });
+
   usePageView('event_select');
   const [event, setEvent] = useState<Event | null>(null);
   const [nickname, setNickname] = useState('');
@@ -457,6 +461,7 @@ export default function SelectTime() {
             dateLabels={dateLabels}
             forceDragMode={forceDragMode}
             hintedKeys={fixedUnavailableKeys}
+            scrollTopRef={pageScrollTopRef}
           />
         </View>
       ) : (
