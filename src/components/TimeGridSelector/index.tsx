@@ -193,7 +193,7 @@ export default function TimeGridSelector(props: Props) {
     if (draggingRef.current) return;
 
     draggingRef.current = true;
-    setIsDragging(true); // 🚨 新增：触发重新渲染，锁定滚动
+    setIsDragging(true);
     dragStartRef.current = startPos;
     lastPosRef.current = startPos;
 
@@ -375,7 +375,7 @@ export default function TimeGridSelector(props: Props) {
           <View
             id={wrapperId}
             className="time-grid-wrapper"
-            catchMove={forceDragMode || isDragging}
+            catchMove={forceDragMode}
             onTouchStart={onTouchStart as any}
             onTouchMove={onTouchMove as any}
             onTouchEnd={onTouchEnd as any}
