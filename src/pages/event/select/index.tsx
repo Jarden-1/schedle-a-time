@@ -28,6 +28,7 @@ export default function SelectTime() {
 
   const [showGuide, setShowGuide] = useState(false);
   const [fixedUnavailableKeys, setFixedUnavailableKeys] = useState<Set<string>>(new Set());
+  const [echoedPrevious, setEchoedPrevious] = useState(false);
   const [showPresetTip, setShowPresetTip] = useState(false);
 
   const closeGuide = () => {
@@ -134,18 +135,21 @@ export default function SelectTime() {
     let target = null;
     const decodedNick = nick ? decodeURIComponent(nick).trim() : '';
 
-    // 非代填模式，才允许使用 openid 匹配真实用户
-    if (!proxyMode && currentUser?.openid) {
-      target = evt.participants.find((p) => p.openid === currentUser.openid);
-    }
-
-    // 如果没找到，或者是代填模式，严格使用昵称匹配
-    if (!target && decodedNick) {
+    // 本人填写：只认 openid。
+    // 之前还会退化到昵称匹配，导致「和代填成员同名」的填写人看到别人的整片选中。
+    if (!proxyMode) {
+      target = currentUser?.openid
+        ? evt.participants.find((p) => p.openid === currentUser.openid)
+        : null;
+    } else if (decodedNick) {
+      // 代填模式成员没有 openid，只能按昵称定位
       target = evt.participants.find((p) => p.nickName === decodedNick);
     }
 
     const allKeys = getEventSlotKeys(evt);
-    const unavailableKeys = evt.timeMode === TimeMode.TIME_SLOT || (evt.timeMode as any) === 'TIME_SLOT'
+    // 常规不可用时段只作为「红色提示」，不再影响默认选中状态
+    const shouldHint = settings?.autoApplyWeeklyUnavailable === true;
+    const unavailableKeys = shouldHint && (evt.timeMode === TimeMode.TIME_SLOT || (evt.timeMode as any) === 'TIME_SLOT')
       ? mapWeeklyUnavailableToEventSlots(allKeys, settings?.weeklyUnavailableSlots || [])
       : new Set<string>();
     setFixedUnavailableKeys(unavailableKeys);
@@ -159,13 +163,15 @@ export default function SelectTime() {
     );
 
     if (target && targetHasSubmitted) {
+      // 回显本人上一次填写的内容
       setSelectedSlots(new Set(Array.isArray(target.availableSlots) ? target.availableSlots : []));
       setNickname(target.nickName);
+      setEchoedPrevious(true);
     } else {
+      // 首次进入默认全空，交给用户自己点；不再因为预设开关自动全选
+      setSelectedSlots(new Set());
       setNickname(target?.nickName || decodedNick);
-      if (!proxyMode && settings?.autoApplyWeeklyUnavailable) {
-        applyDefaultSelection(evt, settings.weeklyUnavailableSlots);
-      }
+      setEchoedPrevious(false);
     }
   };
 
@@ -209,11 +215,16 @@ export default function SelectTime() {
 
   const actionHintText = useMemo(() => {
     if (!event) return '';
-    if (event.timeMode !== TimeMode.TIME_SLOT) return '💡 点击方格选择您的空闲日期';
-    if (forceDragMode) return '✨ 页面已锁定。如需上下翻页，请先关闭连选';
-    const presetCopy = fixedUnavailableKeys.size > 0 ? '红色为预设不可用，默认未选；' : '';
-    return `💡 ${presetCopy}点击单选，长按或开启「连选」可滑动拖拽`;
-  }, [event, fixedUnavailableKeys.size, forceDragMode]);
+    if (event.timeMode !== TimeMode.DATE_ONLY && (event.timeMode as any) !== 'DATE_ONLY') {
+      if (forceDragMode) return '✨ 页面已锁定。如需上下翻页，请先关闭连选';
+    }
+    const echoCopy = echoedPrevious ? '已回显上次填写；' : '';
+    const presetCopy = fixedUnavailableKeys.size > 0 ? '红色为预设不可用，未选中；' : '';
+    if (event.timeMode === TimeMode.DATE_ONLY || (event.timeMode as any) === 'DATE_ONLY') {
+      return `💡 ${echoCopy}${presetCopy}点击方格选择您的空闲日期`;
+    }
+    return `💡 ${echoCopy}${presetCopy}点击单选，长按或开启「连选」可滑动拖拽`;
+  }, [event, fixedUnavailableKeys.size, forceDragMode, echoedPrevious]);
 
   const toggleSlot = useCallback((slot: string) => {
     setSelectedSlots((prev) => {
@@ -430,7 +441,7 @@ export default function SelectTime() {
         </View>
 
         {fixedUnavailableKeys.size > 0 ? (
-          <Text className="weekly-hint">已识别 {fixedUnavailableKeys.size} 个常规不可用时段，可手动改回。</Text>
+          <Text className="weekly-hint">已标出 {fixedUnavailableKeys.size} 个常规不可用时段（未选中）。</Text>
         ) : autoApplyWeeklyUnavailable ? (
           <Text className="weekly-hint">未命中常规不可用时段，可在“我的”里维护每周时间表。</Text>
         ) : null}

@@ -118,8 +118,8 @@ export default function WeeklyUnavailablePage() {
       <View className="settings-card">
         <View className="setting-row">
           <View className="setting-copy">
-            <Text className="setting-title">参与活动时自动套用</Text>
-            <Text className="setting-desc">默认关闭，由你手动选择空闲时间；开启后自动选中常规不可用时段以外的时间。</Text>
+            <Text className="setting-title">在选时间页标出这些时段</Text>
+            <Text className="setting-desc">开启后，填写时间时会把常规不可用时段标红提醒；不会自动选中，仍然由你自己点选。</Text>
           </View>
           <Switch checked={autoApply} onChange={(e: any) => setAutoApply(e.detail.value ?? e.detail.checked)} />
         </View>
