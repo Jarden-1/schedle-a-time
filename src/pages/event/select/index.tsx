@@ -286,10 +286,10 @@ export default function SelectTime() {
     Taro.showLoading({ title: isUpdate ? '更新中...' : '提交中...' });
 
     try {
-      const success = await updateAvailabilityAPI(event.id, finalNickname, Array.from(selectedSlots), isProxyMode);
+      const result = await updateAvailabilityAPI(event.id, finalNickname, Array.from(selectedSlots), isProxyMode);
       Taro.hideLoading();
 
-      if (success) {
+      if (result.success) {
         Taro.showToast({
           title: isUpdate ? '修改成功' : '提交成功',
           icon: 'success',
@@ -308,7 +308,7 @@ export default function SelectTime() {
           }
         }, 1500);
       } else {
-        Taro.showToast({ title: '提交失败，请重试', icon: 'none' });
+        Taro.showToast({ title: result.error || '提交失败，请重试', icon: 'none' });
       }
     } catch (error) {
       Taro.hideLoading();

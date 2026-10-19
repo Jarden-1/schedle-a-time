@@ -375,7 +375,7 @@ export default function TimeGridSelector(props: Props) {
           <View
             id={wrapperId}
             className="time-grid-wrapper"
-            catchMove={forceDragMode}
+            catchMove={forceDragMode || isDragging}
             onTouchStart={onTouchStart as any}
             onTouchMove={onTouchMove as any}
             onTouchEnd={onTouchEnd as any}

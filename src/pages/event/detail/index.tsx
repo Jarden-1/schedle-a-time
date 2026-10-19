@@ -277,9 +277,9 @@ export default function EventDetail() {
   );
 
   const hasSubmitted = !!event?.participants.some(p => {
-    const matchOpenid = !!myOpenid && p.openid === myOpenid;
-    const matchNick = !!selfNick && p.nickName === selfNick;
-    return (matchOpenid || matchNick) && participantHasSubmitted(p);
+    // 🚨 有 openid 时只认 openid，否则同名用户会被误判成「我已提交」
+    const isMe = myOpenid ? p.openid === myOpenid : (!!selfNick && p.nickName === selfNick);
+    return isMe && participantHasSubmitted(p);
   });
 
   // 🚨 优先用服务端下发的已填写人数（决策不公开时他人时段会被裁剪）

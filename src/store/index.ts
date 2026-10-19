@@ -36,9 +36,9 @@ interface AppState {
   createEventAPI: (form: CreateEventForm) => Promise<Event | null | 'NEED_LOGIN'>;
   updateEventAPI: (eventId: string, updates: Partial<Event>) => Promise<boolean>;
   deleteEventAPI: (eventId: string) => Promise<boolean>;
-  updateAvailabilityAPI: (eventId: string, nickName: string, availableSlots: string[], isProxy?: boolean) => Promise<boolean>;
-  confirmTimeAPI: (eventId: string, slots: Slot | Slot[]) => Promise<boolean>;
-  manageMemberAPI: (eventId: string, targetOpenid: string | undefined, targetNickName: string, action: 'SET_ADMIN' | 'REMOVE_ADMIN' | 'KICK_MEMBER' | 'SET_VIP' | 'REMOVE_VIP' | 'RENAME_MEMBER', targetParticipantId?: string, targetDisplayName?: string) => Promise<boolean>;
+  updateAvailabilityAPI: (eventId: string, nickName: string, availableSlots: string[], isProxy?: boolean) => Promise<{ success: boolean; error?: string }>;
+  confirmTimeAPI: (eventId: string, slots: Slot | Slot[]) => Promise<{ success: boolean; error?: string }>;
+  manageMemberAPI: (eventId: string, targetOpenid: string | undefined, targetNickName: string, action: 'SET_ADMIN' | 'REMOVE_ADMIN' | 'KICK_MEMBER' | 'SET_VIP' | 'REMOVE_VIP' | 'RENAME_MEMBER', targetParticipantId?: string, targetDisplayName?: string) => Promise<{ success: boolean; error?: string }>;
   /** 普通参与者退出活动（只按自己的 openid 移除，不需要管理权限） */
   leaveEventAPI: (eventId: string) => Promise<boolean>;
 
@@ -200,6 +200,14 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
     } catch (error) {
       console.error('Fetch events error:', error);
+
+      // 🚨 未登录/登录失效时不能回退到本地缓存，否则会展示上一个账号的数据
+      if ((error as any)?.statusCode === 401) {
+        Taro.removeStorageSync('events');
+        set({ events: [], loading: false });
+        return;
+      }
+
       const localEvents = Taro.getStorageSync('events') || [];
       set({ events: localEvents, loading: false });
     }
@@ -341,14 +349,14 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       if (result && result.success) {
         await get().fetchEvents(); // 成功后刷新数据
-        return true;
+        return { success: true };
       }
       set({ loading: false });
-      return false;
-    } catch (error) {
+      return { success: false, error: result?.error };
+    } catch (error: any) {
       console.error('Update availability error:', error);
       set({ loading: false });
-      return false;
+      return { success: false, error: error?.message };
     }
   },
 
@@ -370,14 +378,14 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       if (result && result.success) {
         await get().fetchEvents();
-        return true;
+        return { success: true };
       }
       set({ loading: false });
-      return false;
-    } catch (error) {
+      return { success: false, error: result?.error };
+    } catch (error: any) {
       console.error('Confirm time error:', error);
       set({ loading: false });
-      return false;
+      return { success: false, error: error?.message };
     }
   },
 
@@ -394,16 +402,16 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       if (!result?.success) {
         set({ loading: false });
-        return false;
+        return { success: false, error: result?.error };
       }
 
       await get().getEventById(eventId);
       set({ loading: false });
-      return true;
-    } catch (error) {
+      return { success: true };
+    } catch (error: any) {
       console.error('Manage member error:', error);
       set({ loading: false });
-      return false;
+      return { success: false, error: error?.message };
     }
   },
 

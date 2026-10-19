@@ -39,6 +39,6 @@ export const isEventExpired = (event: any): boolean => {
 };
 
 export const generateSharePosterText = (event: any): string => {
-  const status = event.status === 'confirmed' ? '✅ 已确定时间' : '📅 收集中';
+  const status = String(event.status || '').toUpperCase() === 'CONFIRMED' ? '✅ 已确定时间' : '📅 收集中';
   return `约时间：${event.title}\n${status}\n点击参与 →`;
 };

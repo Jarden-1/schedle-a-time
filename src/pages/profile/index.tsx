@@ -175,6 +175,9 @@ export default function Profile() {
           Taro.removeStorageSync('userNickName');
           // 2.3 修复：退出登录时同步清理 token
           Taro.removeStorageSync('token');
+          // 🚨 退出登录必须清掉事件缓存，否则换人登录前会看到上一个人的活动
+          Taro.removeStorageSync('events');
+          useAppStore.getState().setEvents([]);
           Taro.removeStorageSync('weeklyUnavailableSlots');
           Taro.removeStorageSync('autoApplyWeeklyUnavailable');
 
@@ -197,8 +200,12 @@ export default function Profile() {
   });
 
   const joinedEvents = events.filter((e) => {
-    // 1. 判断是否在参与者列表中
-    const isParticipant = !!userNickName && e.participants.some((p) => p.nickName === userNickName);
+    // 1. 判断是否在参与者列表中（有 openid 时只认 openid，避免同名误判）
+    const isParticipant = (e.participants || []).some((p) => (
+      currentUser?.openid
+        ? p.openid === currentUser.openid
+        : (!!userNickName && p.nickName === userNickName)
+    ));
 
     // 2. 🚨 核心排重：绝对不能是自己发起的！
     const isNotCreator = currentUser?.openid

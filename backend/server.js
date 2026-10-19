@@ -486,15 +486,43 @@ const latestAnnouncement = {
 // 🛠️ 辅助函数：微信服务通知
 // ==========================================
 // 1. 获取微信 AccessToken
-const getWxAccessToken = async () => {
+// access_token 必须缓存：微信对获取频率有配额，且新 token 会使旧 token 失效。
+// 一次确认要给 N 个参与者发通知，绝不能每次都去换 token。
+let wxAccessTokenCache = { token: '', expiresAt: 0 };
+let wxAccessTokenPending = null;
+
+const refreshWxAccessToken = async () => {
   const url = `https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=${process.env.WX_APPID}&secret=${process.env.WX_APPSECRET}`;
-  const res = await axios.get(url);
-  if (res.data && res.data.access_token) return res.data.access_token;
-  throw new Error('获取 access_token 失败');
+  const res = await axios.get(url, { timeout: 8000 });
+  const data = res.data || {};
+  if (data.errcode || !data.access_token) {
+    throw new Error(`获取 access_token 失败: ${data.errmsg || data.errcode || 'unknown'}`);
+  }
+  const expiresIn = Number(data.expires_in) || 7200;
+  wxAccessTokenCache = {
+    token: data.access_token,
+    // 提前 5 分钟视为过期，避免边界情况
+    expiresAt: Date.now() + Math.max(60, expiresIn - 300) * 1000
+  };
+  return wxAccessTokenCache.token;
+};
+
+const getWxAccessToken = async (forceRefresh = false) => {
+  if (!forceRefresh && wxAccessTokenCache.token && wxAccessTokenCache.expiresAt > Date.now()) {
+    return wxAccessTokenCache.token;
+  }
+  if (forceRefresh) {
+    wxAccessTokenCache = { token: '', expiresAt: 0 };
+  }
+  if (!wxAccessTokenPending) {
+    wxAccessTokenPending = refreshWxAccessToken()
+      .finally(() => { wxAccessTokenPending = null; });
+  }
+  return wxAccessTokenPending;
 };
 
 // 2. 发送订阅消息给指定用户 (🚨 完美适配真实确认时间和跨度包围逻辑)
-const sendSubscribeMessage = async (openid, event) => {
+const sendSubscribeMessage = async (openid, event, retried = false) => {
   try {
     const accessToken = await getWxAccessToken();
     const url = `https://api.weixin.qq.com/cgi-bin/message/subscribe/send?access_token=${accessToken}`;
@@ -566,7 +594,17 @@ const sendSubscribeMessage = async (openid, event) => {
     };
 
     const res = await axios.post(url, data);
-    console.log(`✅ 已向 ${openid} 发送确认通知, 微信返回结果:`, res.data);
+    const payload = res.data || {};
+    if (payload.errcode && payload.errcode !== 0) {
+      // 40001/40014/42001：token 失效，刷新后重试一次
+      if (!retried && [40001, 40014, 42001].includes(Number(payload.errcode))) {
+        await getWxAccessToken(true);
+        return sendSubscribeMessage(openid, event, true);
+      }
+      console.error(`❌ 向 ${openid} 发送通知失败: ${payload.errcode} ${payload.errmsg || ''}`);
+      return;
+    }
+    console.log(`✅ 已向 ${openid} 发送确认通知`);
   } catch (err) {
     console.error(`❌ 向 ${openid} 发送通知失败:`, err.response?.data || err.message);
   }
@@ -656,14 +694,26 @@ app.post('/api/events', verifyToken, async (req, res) => {
       },
       openid
     );
+    // 只接收白名单字段：避免客户端注入 confirmedSlots / status / createdAt 等
     const newEvent = new Event({
-      ...body,
+      id: body.id,
+      title: body.title,
+      description: body.description || '',
+      timeMode: body.timeMode,
+      dateRange: { start: body.dateRange.start, end: body.dateRange.end },
+      timeRange: body.timeRange ? { start: body.timeRange.start, end: body.timeRange.end } : undefined,
+      granularity: Number(body.granularity),
+      allowInvite: body.allowInvite !== false,
+      isDecisionPublic: body.isDecisionPublic === true,
       creatorId: openid,
+      creatorNickName: body.creatorNickName || creatorParticipant.nickName,
       adminIds: [],
       vipIds: [],
       participants: [creatorParticipant],
-      status: body.status || 'ACTIVE',
-      createdAt: body.createdAt || now,
+      status: 'ACTIVE',
+      confirmedSlots: [],
+      confirmedSlot: null,
+      createdAt: now,
       updatedAt: now
     });
     await newEvent.save();
@@ -757,6 +807,11 @@ app.put('/api/events/:id', verifyToken, async (req, res) => {
       return res.status(400).json({ success: false, error: '请通过确认时间接口完成确认' });
     }
 
+    if (requestedStatus) {
+      // 统一存大写，避免数据库里出现 'closed' / 'CLOSED' 两种写法
+      updates.status = requestedStatus;
+    }
+
     if (requestedStatus === 'ACTIVE') {
       // 撤销确认：清空确认时间并重新开放收集
       updates.confirmedSlots = [];
@@ -794,7 +849,8 @@ app.put('/api/events/:id', verifyToken, async (req, res) => {
         return {
           ...plain,
           availableSlots: kept,
-          hasSubmitted: plain.hasSubmitted && kept.length > 0 ? true : plain.hasSubmitted
+          // 投票被裁剪干净后就不再算「已填写」，让成员重新填一次
+          hasSubmitted: kept.length > 0 ? plain.hasSubmitted : false
         };
       });
     }
@@ -863,6 +919,16 @@ app.post('/api/events/:id/availability', verifyToken, async (req, res) => {
       return res.status(400).json({ success: false, error: '可用时间数据不合法' });
     }
 
+    const existingIndex = event.participants.findIndex(p => {
+      if (openid) return p.openid === openid;
+      return p.nickName === nickName && !p.openid;
+    });
+
+    // 「允许参与者邀请」关闭后，新成员不能只凭活动 ID 自行加入
+    if (!isProxy && existingIndex < 0 && event.allowInvite === false) {
+      return res.status(403).json({ success: false, error: '该活动已关闭邀请，无法加入' });
+    }
+
     // 白名单校验：只接受活动当前网格内的格子，并去重
     const validKeys = new Set(generateEventSlotKeys(event));
     if (validKeys.size === 0) {
@@ -876,11 +942,6 @@ app.post('/api/events/:id/availability', verifyToken, async (req, res) => {
       uniqueSlots.add(slot);
     }
     const normalizedSlots = Array.from(uniqueSlots);
-
-    const existingIndex = event.participants.findIndex(p => {
-      if (openid) return p.openid === openid;
-      return p.nickName === nickName && !p.openid;
-    });
 
     const now = new Date().toISOString();
     let nextParticipant;
@@ -974,7 +1035,9 @@ app.post('/api/events/:id/confirm', verifyToken, async (req, res) => {
 
     // 2. 异步向所有有 openid 且提交过的人发送微信通知
     if (event && event.participants) {
-      const targetUsers = event.participants.filter(p => p.openid && p.hasSubmitted === true);
+      const targetUsers = event.participants.filter(p => p.openid && (
+        p.hasSubmitted === true || (Array.isArray(p.availableSlots) && p.availableSlots.length > 0)
+      ));
       targetUsers.forEach(user => {
         // 传入整个 event 对象，以提取发布者等信息
         sendSubscribeMessage(user.openid, event);
@@ -1103,8 +1166,20 @@ app.post('/api/events/:id/members', verifyToken, async (req, res) => {
 // 9. 全局更新用户资料
 app.post('/api/user/profile', verifyToken, async (req, res) => {
   try {
-    const { nickName, avatarUrl } = req.body;
+    const { nickName, avatarUrl } = req.body || {};
     const openid = req.user.openid;
+
+    if (nickName !== undefined) {
+      if (typeof nickName !== 'string' || nickName.trim().length === 0 || nickName.trim().length > 20) {
+        return res.status(400).json({ success: false, error: '昵称不能为空且不能超过20个字' });
+      }
+    }
+    if (avatarUrl !== undefined) {
+      if (typeof avatarUrl !== 'string' || avatarUrl.length > 500
+        || !/^https?:\/\//i.test(avatarUrl)) {
+        return res.status(400).json({ success: false, error: '头像地址不合法' });
+      }
+    }
 
     if (nickName) {
       await Event.updateMany(

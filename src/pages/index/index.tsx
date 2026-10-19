@@ -87,11 +87,11 @@ export default function Index() {
       p?.hasSubmitted === true || (Array.isArray(p?.availableSlots) && p.availableSlots.length > 0)
     );
 
-    const isParticipant =
-      !!userNickName &&
-      !!event.participants?.some(
-        (p) => (p?.openid === openid || p?.nickName === userNickName) && hasSubmitted(p)
-      );
+    // 🚨 有 openid 时只认 openid，避免同名用户互相串数据
+    const isParticipant = !!event.participants?.some((p) => {
+      const isMe = openid ? p?.openid === openid : (!!userNickName && p?.nickName === userNickName);
+      return isMe && hasSubmitted(p);
+    });
 
     if (activeTab === 'all') return isCreator || isAdmin || isParticipant;
     if (activeTab === 'created') return isCreator;

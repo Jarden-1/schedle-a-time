@@ -102,17 +102,17 @@ export default function SlotDetail() {
         return { date, startTime, endTime: endTime || '' };
       });
 
-      const success = await confirmTimeAPI(event.id, payload);
+      const result = await confirmTimeAPI(event.id, payload);
 
       Taro.hideLoading();
 
-      if (success) {
+      if (result.success) {
         Taro.showToast({ title: '已确认！', icon: 'success', duration: 1500 });
         setTimeout(() => {
           Taro.redirectTo({ url: `/pages/event/detail/index?id=${event.id}` });
         }, 1500);
       } else {
-        Taro.showToast({ title: '确认失败，请重试', icon: 'none' });
+        Taro.showToast({ title: result.error || '确认失败，请重试', icon: 'none' });
       }
     } catch (error) {
       Taro.hideLoading();

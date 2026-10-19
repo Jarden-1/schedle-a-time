@@ -215,7 +215,7 @@ export default function EventParticipants() {
         setActionLoading(true);
         Taro.showLoading({ title: '处理中' });
         try {
-          const ok = await manageMemberAPI(
+          const result = await manageMemberAPI(
             event.id,
             participantOpenid,
             participant.nickName,
@@ -223,11 +223,11 @@ export default function EventParticipants() {
             participant.participantId,
             nextDisplayName
           );
-          if (ok) {
+          if (result.success) {
             Taro.showToast({ title: successToast, icon: 'success' });
             await loadEvent(event.id);
           } else {
-            Taro.showToast({ title: '操作失败', icon: 'none' });
+            Taro.showToast({ title: result.error || '操作失败', icon: 'none' });
           }
         } catch {
           Taro.showToast({ title: '操作失败', icon: 'none' });

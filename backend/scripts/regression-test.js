@@ -511,6 +511,81 @@ const test = async (name, fn) => {
     assert.strictEqual(res.statusCode, 409);
   });
 
+  await test('裁剪清空投票后重置 hasSubmitted', async () => {
+    const event = seedEvent();
+    const res = await invoke('PUT', '/api/events/:id', {
+      openid: 'creator',
+      params: { id: event.id },
+      body: { dateRange: { start: '2026-12-01', end: '2026-12-01' } }
+    });
+    assert.strictEqual(res.statusCode, 200, JSON.stringify(res.body));
+    const after = events.get(event.id);
+    after.participants.forEach((participant) => {
+      assert.strictEqual(participant.hasSubmitted, false, `${participant.openid} 应回到未填写状态`);
+    });
+  });
+
+  await test('创建事件忽略客户端注入的 status / confirmedSlots', async () => {
+    const res = await invoke('POST', '/api/events', {
+      openid: 'creator',
+      body: {
+        id: 'evt_inject',
+        title: '注入测试',
+        creatorNickName: '发起人',
+        timeMode: 'time_slot',
+        dateRange: { start: '2026-11-01', end: '2026-11-01' },
+        timeRange: { start: '09:00', end: '10:00' },
+        granularity: 30,
+        status: 'CONFIRMED',
+        confirmedSlots: [{ date: '2026-11-01', startTime: '09:00', endTime: '09:30' }]
+      }
+    });
+    assert.strictEqual(res.statusCode, 200, JSON.stringify(res.body));
+    const saved = events.get('evt_inject');
+    assert.strictEqual(saved.status, 'ACTIVE');
+    assert.deepStrictEqual(saved.confirmedSlots, []);
+  });
+
+  await test('关闭邀请后新成员无法自行加入', async () => {
+    const event = seedEvent({ allowInvite: false });
+    const res = await invoke('POST', '/api/events/:id/availability', {
+      openid: 'stranger',
+      params: { id: event.id },
+      body: { nickName: '陌生人', availableSlots: ['2026-11-01_09:00-09:30'] }
+    });
+    assert.strictEqual(res.statusCode, 403);
+    assert.ok(!events.get(event.id).participants.some(p => p.openid === 'stranger'));
+  });
+
+  await test('关闭邀请后已有成员仍可更新', async () => {
+    const event = seedEvent({ allowInvite: false });
+    const res = await invoke('POST', '/api/events/:id/availability', {
+      openid: 'alice',
+      params: { id: event.id },
+      body: { nickName: '爱丽丝', availableSlots: ['2026-11-01_09:30-10:00'] }
+    });
+    assert.strictEqual(res.statusCode, 200, JSON.stringify(res.body));
+  });
+
+  await test('PUT 状态统一存为大写', async () => {
+    const event = seedEvent();
+    const res = await invoke('PUT', '/api/events/:id', {
+      openid: 'creator',
+      params: { id: event.id },
+      body: { status: 'closed' }
+    });
+    assert.strictEqual(res.statusCode, 200, JSON.stringify(res.body));
+    assert.strictEqual(events.get(event.id).status, 'CLOSED');
+  });
+
+  await test('用户资料昵称超长被拒绝', async () => {
+    const res = await invoke('POST', '/api/user/profile', {
+      openid: 'creator',
+      body: { nickName: 'x'.repeat(21) }
+    });
+    assert.strictEqual(res.statusCode, 400);
+  });
+
   // ---------- P2-8 时间校验 ----------
   await test('P2-8 非法日历日期被拒绝', async () => {
     const res = await invoke('POST', '/api/events', {

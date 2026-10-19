@@ -238,6 +238,24 @@ const cleanup = async () => {
       timeRange: { start: '09:30', end: '10:30' }
     }, 409);
 
+    // ---------- 回归：撤销确认后重新开放 ----------
+    await expectStatus('PUT', `/api/events/${eventId}`, ownerToken, {
+      status: 'ACTIVE',
+      confirmedSlot: null
+    }, 200);
+
+    const afterRevoke = await expectStatus('GET', `/api/events/${eventId}`, ownerToken, undefined, 200);
+    if (String(afterRevoke.data?.data?.status || '').toUpperCase() !== 'ACTIVE') {
+      throw new Error('revoke did not reopen the event');
+    }
+    if ((afterRevoke.data?.data?.confirmedSlots || []).length !== 0) {
+      throw new Error('revoke did not clear confirmed slots');
+    }
+    await expectStatus('POST', `/api/events/${eventId}/availability`, ownerToken, {
+      nickName: 'Owner',
+      availableSlots: ['2026-05-09_09:00-09:30']
+    }, 200);
+
     await cleanup();
     console.log('integration smoke test completed');
   } catch (err) {
