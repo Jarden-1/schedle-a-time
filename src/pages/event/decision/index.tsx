@@ -366,7 +366,7 @@ export default function DecisionPanel() {
   }
 
   // 🚨 决策数据门禁：关闭「决策面板公开」后，只有发起人/管理员能看
-  const decisionAllowed = canManage || event.isDecisionPublic === true || event.decisionRedacted === false;
+  const decisionAllowed = canManage || event.isDecisionPublic === true;
   if (!decisionAllowed) {
     return (
       <View className="decision-page">

@@ -791,7 +791,7 @@ const test = async (name, fn) => {
     const limiter = handlers[0];
 
     let blocked = 0;
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 200; i++) {
       const res = makeRes();
       let passed = false;
       limiter({ ip: '203.0.113.7', headers: {} }, res, () => { passed = true; });

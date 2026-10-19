@@ -59,8 +59,20 @@ const createRateLimiter = ({ windowMs, max, name }) => {
     return next();
   };
 };
-const loginLimiter = createRateLimiter({ windowMs: 60 * 1000, max: 20, name: 'login' });
-const uploadLimiter = createRateLimiter({ windowMs: 60 * 1000, max: 10, name: 'upload' });
+const readLimit = (value, fallback) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
+};
+const loginLimiter = createRateLimiter({
+  windowMs: 60 * 1000,
+  max: readLimit(process.env.LOGIN_RATE_LIMIT, 60),
+  name: 'login'
+});
+const uploadLimiter = createRateLimiter({
+  windowMs: 60 * 1000,
+  max: readLimit(process.env.UPLOAD_RATE_LIMIT, 20),
+  name: 'upload'
+});
 
 // 1. 静态文件夹配置
 const uploadDir = path.join(__dirname, 'uploads');
@@ -272,7 +284,10 @@ const projectEventForViewer = (event, viewerOpenid, options = {}) => {
   const includeSlots = options.includeSlots !== false;
   const plain = (event && typeof event.toObject === 'function') ? event.toObject() : { ...(event || {}) };
   const canManage = canManageEvent(plain, viewerOpenid);
-  const fullAccess = canManage || plain.isDecisionPublic === true;
+  // 旧版前端靠 availableSlots.length 统计「N 人已填写」，裁剪会让它显示成 1。
+  // 新前端发布前，可以用 REDACT_DECISION=false 临时恢复旧行为。
+  const redactionEnabled = process.env.REDACT_DECISION !== 'false';
+  const fullAccess = canManage || plain.isDecisionPublic === true || !redactionEnabled;
   const participants = (plain.participants || []).map(
     p => projectParticipant(p, viewerOpenid, fullAccess, includeSlots)
   );
