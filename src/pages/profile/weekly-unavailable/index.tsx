@@ -13,8 +13,12 @@ import {
   weeklyKeyToGridKey
 } from '@/utils';
 import './index.scss';
+import { usePageView } from '@/hooks/usePageView';
+import { track } from '@/services/telemetry';
+import { TRACK } from '@/constants/app';
 
 export default function WeeklyUnavailablePage() {
+  usePageView('weekly_unavailable');
   const {
     currentUser,
     weeklyUnavailableSlots,
@@ -72,6 +76,7 @@ export default function WeeklyUnavailablePage() {
         .map(gridKeyToWeeklyKey)
         .filter(Boolean)
         .sort();
+      track(TRACK.WEEKLY_SETTINGS_SAVE, { slotCount: weeklyKeys.length, autoApply: autoApply ? 1 : 0 });
       const ok = await updateWeeklyUnavailableAPI(weeklyKeys, autoApply);
       Taro.hideLoading();
       Taro.showToast({ title: ok ? '已保存' : '保存失败', icon: ok ? 'success' : 'none' });

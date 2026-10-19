@@ -7,8 +7,12 @@ import Loading from '@/components/Loading';
 import EmptyState from '@/components/EmptyState';
 import { formatDate } from '@/utils';
 import './index.scss';
+import { usePageView } from '@/hooks/usePageView';
+import { track, } from '@/services/telemetry';
+import { TRACK } from '@/constants/app';
 
 export default function AnnouncementPage() {
+  usePageView('announcement');
   const { latestAnnouncement, fetchLatestAnnouncementAPI, markAnnouncementRead } = useAppStore();
   const [announcement, setAnnouncement] = useState<Announcement | null>(latestAnnouncement);
   const [loading, setLoading] = useState(true);
@@ -18,6 +22,7 @@ export default function AnnouncementPage() {
     const next = latest || latestAnnouncement;
     setAnnouncement(next);
     if (next?.id) markAnnouncementRead(next.id);
+    if (next?.id) track(TRACK.ANNOUNCEMENT_READ, { id: next.id });
     setLoading(false);
   });
 

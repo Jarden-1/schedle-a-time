@@ -7,8 +7,12 @@ import { getParticipantDisplayName } from '@/utils';
 import Loading from '@/components/Loading';
 import EmptyState from '@/components/EmptyState';
 import './index.scss';
+import { usePageView } from '@/hooks/usePageView';
+import { track } from '@/services/telemetry';
+import { TRACK } from '@/constants/app';
 
 export default function EventParticipants() {
+  usePageView('event_participants');
   const [event, setEvent] = useState<Event | null>(null);
   const [initialLoading, setInitialLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
@@ -212,6 +216,7 @@ export default function EventParticipants() {
 
         if (!apiAction) return;
 
+        track(TRACK.MEMBER_ACTION, { action: String(apiAction) });
         setActionLoading(true);
         Taro.showLoading({ title: '处理中' });
         try {

@@ -1,9 +1,11 @@
 import Taro from '@tarojs/taro';
 import { User } from '@/types';
 import { normalizeUser } from '@/utils/user';
+import { trackError } from '@/services/telemetry';
 
-export const BASE_URL = API_BASE_URL || 'https://api.zhanghaoyang.cn/api';
-export const UPLOAD_URL = `${BASE_URL}/upload`;
+import { BASE_URL, UPLOAD_URL } from '@/constants/env';
+
+export { BASE_URL, UPLOAD_URL };
 
 export type ApiMethod = 'GET' | 'POST' | 'PUT' | 'DELETE';
 
@@ -79,6 +81,10 @@ export const requestAPI = async (endpoint: string, method: ApiMethod = 'GET', da
     }
 
     console.error(`Request ${endpoint} error:`, error);
+    // 接口失败（5xx / 网络 / 非 401）上报，401 属于正常登录态过期不记为错误
+    if (error?.statusCode !== 401) {
+      trackError(error, { path: endpoint, meta: { method, status: error?.statusCode } });
+    }
     throw error;
   }
 };

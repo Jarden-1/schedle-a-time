@@ -10,6 +10,8 @@ const path = require('path');
 const fs = require('fs');
 const Event = require('./models/Event');
 const UserPreference = require('./models/UserPreference');
+const TelemetryEvent = require('./models/TelemetryEvent');
+const ErrorLog = require('./models/ErrorLog');
 
 const app = express();
 
@@ -72,6 +74,11 @@ const uploadLimiter = createRateLimiter({
   windowMs: 60 * 1000,
   max: readLimit(process.env.UPLOAD_RATE_LIMIT, 20),
   name: 'upload'
+});
+const telemetryLimiter = createRateLimiter({
+  windowMs: 60 * 1000,
+  max: readLimit(process.env.TELEMETRY_RATE_LIMIT, 240),
+  name: 'telemetry'
 });
 
 // 1. 静态文件夹配置
@@ -142,6 +149,52 @@ const verifyToken = (req, res, next) => {
     next();
   } catch (err) {
     return res.status(401).json({ success: false, error: 'Token 无效或已过期' });
+  }
+};
+
+// 埋点接口允许匿名（登录失败也要能上报），有 token 就顺带关联 openid
+const optionalAuth = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    try {
+      req.user = jwt.verify(authHeader.split(' ')[1], process.env.JWT_SECRET);
+    } catch {
+      // 忽略非法/过期 token，按匿名处理
+    }
+  }
+  next();
+};
+
+const sanitizeProps = (props) => {
+  if (!props || typeof props !== 'object' || Array.isArray(props)) return {};
+  const out = {};
+  let count = 0;
+  for (const [key, value] of Object.entries(props)) {
+    if (count >= 20) break;
+    if (typeof key !== 'string' || key.length === 0 || key.length > 40) continue;
+    if (value === null || ['string', 'number', 'boolean'].includes(typeof value)) {
+      out[key] = typeof value === 'string' ? value.slice(0, 200) : value;
+      count += 1;
+    }
+  }
+  return out;
+};
+
+const recordError = async (payload = {}) => {
+  try {
+    await ErrorLog.create({
+      source: payload.source || 'backend',
+      level: payload.level || 'error',
+      message: String(payload.message || '').slice(0, 2000),
+      stack: String(payload.stack || '').slice(0, 8000),
+      page: String(payload.page || '').slice(0, 200),
+      path: String(payload.path || '').slice(0, 300),
+      openid: String(payload.openid || '').slice(0, 64),
+      version: String(payload.version || '').slice(0, 32),
+      meta: sanitizeProps(payload.meta)
+    });
+  } catch (error) {
+    console.error('写入错误日志失败:', error.message);
   }
 };
 
@@ -707,6 +760,61 @@ app.post('/api/login', loginLimiter, async (req, res) => {
 
 app.get('/api/announcement/latest', (req, res) => {
   res.json({ success: true, data: latestAnnouncement });
+});
+
+// ==========================================
+// 📊 埋点与错误上报
+// 约定：埋点失败绝不能影响业务，所以这里永远尽量返回 2xx
+// ==========================================
+const TELEMETRY_MAX_EVENTS = 50;
+const TELEMETRY_MAX_ERRORS = 10;
+
+app.post('/api/telemetry', telemetryLimiter, optionalAuth, async (req, res) => {
+  try {
+    const openid = req.user?.openid || '';
+    const rawEvents = Array.isArray(req.body?.events) ? req.body.events.slice(0, TELEMETRY_MAX_EVENTS) : [];
+    const rawErrors = Array.isArray(req.body?.errors) ? req.body.errors.slice(0, TELEMETRY_MAX_ERRORS) : [];
+
+    if (rawEvents.length === 0 && rawErrors.length === 0) {
+      return res.status(204).end();
+    }
+
+    const docs = rawEvents
+      .filter(item => item && typeof item.event === 'string' && item.event.length > 0)
+      .map(item => ({
+        ts: Number.isFinite(Number(item.ts)) ? Number(item.ts) : Date.now(),
+        event: String(item.event).slice(0, 64),
+        page: String(item.page || '').slice(0, 64),
+        openid,
+        sessionId: String(item.sessionId || '').slice(0, 40),
+        version: String(item.version || '').slice(0, 32),
+        props: sanitizeProps(item.props)
+      }));
+
+    if (docs.length > 0) {
+      await TelemetryEvent.insertMany(docs, { ordered: false });
+    }
+
+    for (const item of rawErrors) {
+      await recordError({
+        source: 'miniapp',
+        level: item?.level === 'warn' ? 'warn' : 'error',
+        message: item?.message,
+        stack: item?.stack,
+        page: item?.page,
+        path: item?.path,
+        openid,
+        version: item?.version,
+        meta: item?.meta
+      });
+    }
+
+    return res.json({ success: true, accepted: docs.length });
+  } catch (error) {
+    console.error('埋点上报处理失败:', error.message);
+    // 埋点失败不影响小程序主流程
+    return res.status(200).json({ success: false });
+  }
 });
 
 // ==========================================
@@ -1359,6 +1467,38 @@ app.put('/api/user/weekly-unavailable', verifyToken, async (req, res) => {
     console.error('保存常规不可用时段失败:', error);
     res.status(500).json({ success: false, error: '保存常规不可用时段失败' });
   }
+});
+
+// ==========================================
+// 🛡️ 兜底错误处理（必须放在所有路由之后）
+// ==========================================
+app.use((err, req, res, next) => {
+  console.error('未捕获的请求错误:', err);
+  recordError({
+    path: req.originalUrl,
+    openid: req.user?.openid,
+    message: err?.message,
+    stack: err?.stack,
+    meta: { method: req.method, status: err?.status || err?.statusCode }
+  });
+
+  if (res.headersSent) return next(err);
+  return res.status(500).json({ success: false, error: '服务器内部错误' });
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('unhandledRejection:', reason);
+  recordError({
+    message: reason instanceof Error ? reason.message : String(reason),
+    stack: reason instanceof Error ? reason.stack : ''
+  });
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('uncaughtException:', error);
+  // 先尽力落库再退出，交给 systemd 拉起
+  recordError({ message: error?.message, stack: error?.stack })
+    .finally(() => process.exit(1));
 });
 
 mongoose.connect(process.env.MONGODB_URI)

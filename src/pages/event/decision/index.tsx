@@ -1,14 +1,18 @@
 import Taro, { useLoad } from '@tarojs/taro';
 import { View, Text, Button, ScrollView, Image, Slider } from '@tarojs/components';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { Event, CandidateSlot, TimeMode } from '@/types';
 import { useAppStore } from '@/store';
 import { formatDate, formatTime, parseSlotKey, findBestSlidingWindows, findBestDateWindows, generateTimeSlots, generateDateSlots, getParticipantDisplayName, getParticipantKey } from '@/utils';
 import TimeGridSelector from '@/components/TimeGridSelector';
 import Loading from '@/components/Loading';
 import './index.scss';
+import { usePageView } from '@/hooks/usePageView';
+import { track } from '@/services/telemetry';
+import { TRACK } from '@/constants/app';
 
 export default function DecisionPanel() {
+  usePageView('event_decision');
   const [event, setEvent] = useState<Event | null>(null);
 
   // 🚨 替换原本的单选状态
@@ -236,16 +240,25 @@ export default function DecisionPanel() {
   }, [candidateSlots, isDateOnly]);
 
   // 🚨 核心：计算多个选中时段的综合人员状态（所有选中时段都有空的人，才算有空）
+  // 用 Map 替代每次 find，选中多个时段时不再反复线性扫描
+  const slotByKey = useMemo(() => {
+    const map = new Map<string, CandidateSlot>();
+    candidateSlots.forEach((slot) => {
+      const key = isDateOnly
+        ? slot.slot.date
+        : `${slot.slot.date}_${slot.slot.startTime}-${slot.slot.endTime}`;
+      map.set(key, slot);
+    });
+    return map;
+  }, [candidateSlots, isDateOnly]);
+
   const aggregatedStats = useMemo(() => {
     if (selectedKeys.size === 0) return null;
     const keysArr = Array.from(selectedKeys).sort();
 
     let availableIds = [...participantIds];
     keysArr.forEach(key => {
-      const slotData = candidateSlots.find(c => {
-        const k = isDateOnly ? c.slot.date : `${c.slot.date}_${c.slot.startTime}-${c.slot.endTime}`;
-        return k === key;
-      });
+      const slotData = slotByKey.get(key);
       const idsInThisSlot = slotData ? slotData.availableIds : [];
       // 核心求交集算法（按稳定 ID，不按姓名）
       availableIds = availableIds.filter(id => idsInThisSlot.includes(id));
@@ -268,7 +281,7 @@ export default function DecisionPanel() {
       count: keysArr.length,
       firstSlotDisplay: keysArr[0]
     };
-  }, [selectedKeys, candidateSlots, participantIds, nameById, vipKeys, isDateOnly]);
+  }, [selectedKeys, slotByKey, participantIds, nameById, vipKeys, isDateOnly]);
 
   const handleTop5Click = (slotKeys: string[]) => {
     setSelectedKeys(new Set(slotKeys));
@@ -294,6 +307,14 @@ export default function DecisionPanel() {
       )).length;
 
   // 🚨 完全没有人有空时不提供选择与确认，只做状态提示
+  const emptyTrackedRef = useRef(false);
+  useEffect(() => {
+    if (!event) return;
+    if (candidateSlots.length > 0 || emptyTrackedRef.current) return;
+    emptyTrackedRef.current = true;
+    track(TRACK.DECISION_EMPTY_SHOWN, { submittedCount });
+  }, [event, candidateSlots.length, submittedCount]);
+
   const emptyState = submittedCount > 0
     ? { icon: '🗓', title: '没有人有空', tip: '调整时间范围后可重新收集' }
     : { icon: '📭', title: '还没有人填写', tip: '先把活动分享给参与者' };
@@ -327,6 +348,7 @@ export default function DecisionPanel() {
         return { date, startTime, endTime: endTime || '' };
       });
 
+      track(TRACK.DECISION_CONFIRM_CLICK, { slotCount: confirmedSlots.length });
       const result = await confirmTimeAPI(event.id, confirmedSlots);
       Taro.hideLoading();
 
@@ -581,7 +603,7 @@ export default function DecisionPanel() {
                   const isSelected = selectedKeys.has(dateStr);
                   
                   // 🚨 查一下这个具体日期有几个人投了
-                  const slotData = candidateSlots.find(c => c.slot.date === dateStr);
+                  const slotData = slotByKey.get(dateStr);
                   const availableCount = slotData ? slotData.availableCount : 0;
 
                   return (

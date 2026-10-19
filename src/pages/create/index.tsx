@@ -7,11 +7,15 @@ import { useAppStore } from '@/store';
 import { uploadAvatarToServer } from '@/services/avatar';
 import { buildUserProfile } from '@/utils';
 import './index.scss';
+import { usePageView } from '@/hooks/usePageView';
+import { track } from '@/services/telemetry';
+import { TRACK } from '@/constants/app';
 
 const Input = TaroInput;
 const Textarea = TaroTextarea;
 
 export default function CreateEvent() {
+  usePageView('create');
   const { createEventAPI, updateAvailabilityAPI, userNickName, setUserNickName, loading, loginWithWeChat, setCurrentUser } = useAppStore();
 
   // 🚨 新增：控制弹窗和临时头像的状态
@@ -150,6 +154,7 @@ export default function CreateEvent() {
       }
     }
 
+    track(TRACK.EVENT_CREATE_SUBMIT, { timeMode: String(form.timeMode), autoFill: isAutoFill ? 1 : 0 });
     // 调用真正发请求的函数
     submitEventData(payloadForm);
   };

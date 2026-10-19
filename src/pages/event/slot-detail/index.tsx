@@ -6,8 +6,10 @@ import { useAppStore } from '@/store';
 import { formatDate, getParticipantDisplayName, parseSlotKey } from '@/utils';
 import Loading from '@/components/Loading';
 import './index.scss';
+import { usePageView } from '@/hooks/usePageView';
 
 export default function SlotDetail() {
+  usePageView('event_slot_detail');
   const [event, setEvent] = useState<Event | null>(null);
   const [slotKey, setSlotKey] = useState('');
   const [initialLoading, setInitialLoading] = useState(true);

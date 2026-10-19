@@ -1,0 +1,9 @@
+[Unit]
+Description=MongoDB daily backup for meet_assistant
+After=mongod.service
+
+[Service]
+Type=oneshot
+ExecStart=/root/meet-backend/scripts/backup-mongo.sh
+Nice=10
+IOSchedulingClass=idle

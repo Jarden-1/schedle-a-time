@@ -1,6 +1,6 @@
 import Taro from '@tarojs/taro';
 import { View, ScrollView, Text } from '@tarojs/components';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { parseSlotKey } from '@/utils';
 
 import './index.scss';
@@ -23,6 +23,93 @@ type Props = {
   hintedKeys?: Set<string>;
   showHeaderDate?: boolean;
 };
+
+type GridRowProps = {
+  rowIndex: number;
+  wrapperId: string;
+  cellKeys: (string | null)[];
+  selectedMask: string;
+  hintedMask: string;
+  heatmapData?: Record<string, number>;
+  heatmapCountData?: Record<string, number>;
+  rowDivider: boolean;
+  readonlyMode: boolean;
+  selectedTone: 'green' | 'red';
+};
+
+/**
+ * 单行渲染组件。
+ *
+ * 拖选时每移动一格都会更新选中集合，如果整张表重渲染，几百上千个格子会一起
+ * 走一遍 setData，低端机上直接掉帧。这里把「选中状态」压成位串传入，
+ * React.memo 靠字符串比较即可跳过没有变化的行。
+ */
+const TimeGridRow = memo(function TimeGridRow({
+  rowIndex,
+  wrapperId,
+  cellKeys,
+  selectedMask,
+  hintedMask,
+  heatmapData,
+  heatmapCountData,
+  rowDivider,
+  readonlyMode,
+  selectedTone
+}: GridRowProps) {
+  return (
+    <View className={`time-grid-row ${rowDivider ? 'divider-after' : ''}`}>
+      {cellKeys.map((key, col) => {
+        const isSelected = selectedMask[col] === '1';
+        const isHinted = hintedMask[col] === '1';
+
+        let cellStyle: any = {};
+        if (heatmapData && key && heatmapData[key] !== undefined) {
+          const ratio = heatmapData[key];
+          if (ratio > 0) {
+            cellStyle = { backgroundColor: `rgba(7, 193, 96, ${Math.max(0.1, ratio)})` };
+          } else {
+            cellStyle = { backgroundColor: '#f9f9f9' };
+          }
+        }
+
+        if (isHinted && !isSelected) {
+          cellStyle = {
+            ...cellStyle,
+            backgroundColor: 'rgba(255, 77, 79, 0.12)',
+            borderRightColor: 'rgba(255, 77, 79, 0.18)',
+            borderBottomColor: 'rgba(255, 77, 79, 0.18)'
+          };
+        }
+
+        if (isSelected && !readonlyMode) {
+          const isRed = selectedTone === 'red';
+          cellStyle = {
+            ...cellStyle,
+            backgroundColor: isRed ? 'rgba(255, 77, 79, 0.28)' : 'rgba(7, 193, 96, 0.25)',
+            borderRightColor: isRed ? 'rgba(255, 77, 79, 0.25)' : 'rgba(7, 193, 96, 0.2)',
+            borderBottomColor: isRed ? 'rgba(255, 77, 79, 0.25)' : 'rgba(7, 193, 96, 0.2)',
+            boxShadow: isRed ? 'inset 0 0 0 2px rgba(255, 77, 79, 0.85)' : 'inset 0 0 0 2px rgba(7, 193, 96, 0.8)'
+          };
+        }
+
+        const count = (heatmapCountData && key) ? heatmapCountData[key] : undefined;
+
+        return (
+          <View
+            id={`${wrapperId}-cell-${rowIndex}-${col}`}
+            key={col}
+            className={`time-grid-cell ${isSelected && !readonlyMode ? `selected selected--${selectedTone}` : ''} ${isHinted ? 'hinted' : ''} ${count !== undefined && count > 0 ? 'has-count' : ''}`}
+            style={cellStyle}
+          >
+            {count !== undefined && count > 0 && (
+              <Text className="heatmap-count-text">{count}</Text>
+            )}
+          </View>
+        );
+      })}
+    </View>
+  );
+});
 
 export default function TimeGridSelector(props: Props) {
   const {
@@ -381,66 +468,27 @@ export default function TimeGridSelector(props: Props) {
             onTouchEnd={onTouchEnd as any}
             onTouchCancel={onTouchEnd as any}
           >
-            {Array.from({ length: gridSize.rows }).map((_, r) => (
-              <View key={r} className={`time-grid-row ${dividerAfterRows.has(r) ? 'divider-after' : ''}`}>
-                {Array.from({ length: gridSize.cols }).map((__, c) => {
-                  const key = cellKeyByPos[r]?.[c] ?? null;
-                  const isSelected = key ? renderSelected.has(key) : false;
-                  const isHinted = key ? hintedKeys?.has(key) : false;
+            {Array.from({ length: gridSize.rows }).map((_, r) => {
+              const cellKeys = cellKeyByPos[r] || [];
+              const selectedMask = cellKeys.map(k => (k && renderSelected.has(k) ? '1' : '0')).join('');
+              const hintedMask = cellKeys.map(k => (k && hintedKeys?.has(k) ? '1' : '0')).join('');
 
-                  // 计算热力颜色
-                  let cellStyle: any = {};
-                  if (heatmapData && key && heatmapData[key] !== undefined) {
-                    const ratio = heatmapData[key];
-                    if (ratio > 0) {
-                      // 根据比例设置透明度，基础色为微信绿 (7, 193, 96)
-                      // 为了保证能看清，哪怕是最低比例也给一点底色(如 0.1)
-                      const opacity = Math.max(0.1, ratio);
-                      cellStyle = { backgroundColor: `rgba(7, 193, 96, ${opacity})` };
-                    } else {
-                      cellStyle = { backgroundColor: '#f9f9f9' }; // 没人选的格子显示浅灰
-                    }
-                  }
-
-                  // 🚨 修复：选中态的外观必须追加到 style 中，避免被热力图内联背景覆盖
-                  if (isHinted && !isSelected) {
-                    cellStyle = {
-                      ...cellStyle,
-                      backgroundColor: 'rgba(255, 77, 79, 0.12)',
-                      borderRightColor: 'rgba(255, 77, 79, 0.18)',
-                      borderBottomColor: 'rgba(255, 77, 79, 0.18)'
-                    };
-                  }
-
-                  if (isSelected && !readonlyMode) {
-                    const isRed = selectedTone === 'red';
-                    cellStyle = {
-                      ...cellStyle,
-                      backgroundColor: isRed ? 'rgba(255, 77, 79, 0.28)' : 'rgba(7, 193, 96, 0.25)',
-                      borderRightColor: isRed ? 'rgba(255, 77, 79, 0.25)' : 'rgba(7, 193, 96, 0.2)',
-                      borderBottomColor: isRed ? 'rgba(255, 77, 79, 0.25)' : 'rgba(7, 193, 96, 0.2)',
-                      boxShadow: isRed ? 'inset 0 0 0 2px rgba(255, 77, 79, 0.85)' : 'inset 0 0 0 2px rgba(7, 193, 96, 0.8)'
-                    };
-                  }
-
-                  // 获取当前格子的人数
-                  const count = (heatmapCountData && key) ? heatmapCountData[key] : undefined;
-
-                  return (
-                    <View
-                      id={`${wrapperId}-cell-${r}-${c}`}
-                      key={`${r}-${c}`}
-                      className={`time-grid-cell ${isSelected && !readonlyMode ? `selected selected--${selectedTone}` : ''} ${isHinted ? 'hinted' : ''} ${count !== undefined && count > 0 ? 'has-count' : ''}`}
-                      style={cellStyle}
-                    >
-                      {count !== undefined && count > 0 && (
-                        <Text className="heatmap-count-text">{count}</Text>
-                      )}
-                    </View>
-                  );
-                })}
-              </View>
-            ))}
+              return (
+                <TimeGridRow
+                  key={r}
+                  rowIndex={r}
+                  wrapperId={wrapperId}
+                  cellKeys={cellKeys}
+                  selectedMask={selectedMask}
+                  hintedMask={hintedMask}
+                  heatmapData={heatmapData}
+                  heatmapCountData={heatmapCountData}
+                  rowDivider={dividerAfterRows.has(r)}
+                  readonlyMode={!!readonlyMode}
+                  selectedTone={selectedTone}
+                />
+              );
+            })}
           </View>
         </View>
       </ScrollView>

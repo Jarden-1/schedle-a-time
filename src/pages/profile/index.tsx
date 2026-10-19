@@ -5,8 +5,10 @@ import { useAppStore } from '@/store';
 import { uploadAvatarToServer } from '@/services/avatar';
 import { buildUserProfile, hasCompleteUserProfile } from '@/utils';
 import './index.scss';
+import { usePageView } from '@/hooks/usePageView';
 
 export default function Profile() {
+  usePageView('profile');
   const {
     userNickName,
     setUserNickName,

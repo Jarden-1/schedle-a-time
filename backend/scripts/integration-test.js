@@ -86,6 +86,16 @@ const cleanup = async () => {
       confirmedSlots: [{ date: '2026-05-09', startTime: '09:00', endTime: '09:30' }]
     }, 403);
 
+    // ---------- 埋点接口 ----------
+    await expectStatus('POST', '/api/telemetry', ownerToken, {
+      events: [
+        { ts: Date.now(), event: 'page_view', page: 'index', sessionId: 's_it', version: 'test' },
+        { ts: Date.now(), event: 'select_submit', page: 'event_select', sessionId: 's_it', props: { slotCount: 2 } }
+      ]
+    }, 200);
+
+    await expectStatus('POST', '/api/telemetry', ownerToken, {}, 204);
+
     const preferenceRes = await expectStatus('PUT', '/api/user/weekly-unavailable', ownerToken, {
       weeklyUnavailableSlots: ['1_09:00-09:30', '1_09:30-10:00'],
       autoApplyWeeklyUnavailable: true

@@ -1,8 +1,10 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import Taro from '@tarojs/taro';
 import { View, Text, Button, Image, Input } from '@tarojs/components';
 import { useAppStore } from '@/store';
 import { uploadAvatarToServer } from '@/services/avatar';
+import { track } from '@/services/telemetry';
+import { TRACK } from '@/constants/app';
 
 import './index.scss';
 
@@ -28,6 +30,13 @@ export default function LoginCard({
   onCancel
 }: Props) {
   const { loginWithWeChat, updateUserProfileAPI } = useAppStore();
+
+  const shownRef = useRef(false);
+  useEffect(() => {
+    if (shownRef.current) return;
+    shownRef.current = true;
+    track(TRACK.LOGIN_CARD_SHOWN);
+  }, []);
 
   const [nickName, setNickName] = useState(initialNickName);
   const [avatarFileId, setAvatarFileId] = useState<string>(initialAvatarUrl);

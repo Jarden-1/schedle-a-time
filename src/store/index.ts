@@ -3,6 +3,8 @@ import Taro from '@tarojs/taro';
 import { Announcement, Event, User, CreateEventForm, EventStatus, WeeklyUnavailableSettings } from '@/types';
 import { generateId, hasCompleteUserProfile, normalizeUser } from '@/utils';
 import { requestAPI, UPLOAD_URL } from '@/services/api';
+import { track } from '@/services/telemetry';
+import { TRACK } from '@/constants/app';
 
 interface Slot {
   date: string;
@@ -126,6 +128,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   // 🚨 核心改造 1：基于 code 向自己的服务器换取 openid
   loginWithWeChat: async () => {
     if (process.env.TARO_ENV !== 'weapp') return null;
+    track(TRACK.LOGIN_START);
     try {
       // 1. 获取微信临时登录凭证
       const { code } = await Taro.login();
@@ -162,9 +165,11 @@ export const useAppStore = create<AppState>((set, get) => ({
         console.error('Fetch weekly unavailable after login error:', error);
       });
 
+      track(TRACK.LOGIN_SUCCESS);
       return user;
-    } catch (err) {
+    } catch (err: any) {
       console.error('自建服务器登录失败:', err);
+      track(TRACK.LOGIN_FAIL, { message: String(err?.message || err).slice(0, 120) });
       return null;
     }
   },
@@ -231,6 +236,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     // 🚨 核心拦截器：没有头像或昵称，返回需要登录的标识
     if (!current || !hasCompleteUserProfile(current)) {
       set({ loading: false });
+      track(TRACK.EVENT_CREATE_NEED_LOGIN);
       return 'NEED_LOGIN';
     }
 
@@ -277,6 +283,10 @@ export const useAppStore = create<AppState>((set, get) => ({
           loading: false
         }));
         Taro.setStorageSync('events', get().events);
+        track(TRACK.EVENT_CREATE_SUCCESS, {
+          timeMode: String(form.timeMode),
+          autoFill: form.timeMode ? 1 : 0
+        });
         return result.data as Event;
       }
       throw new Error('服务器端创建失败');
@@ -298,6 +308,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
 
       console.error('Create event error:', error);
+      track(TRACK.EVENT_CREATE_FAIL, { message: String((error as any)?.message || error).slice(0, 120) });
       // 🚨 废除本地兜底！失败就是失败，直接阻断并弹窗提示！
       Taro.showToast({ title: '创建失败，请确保已登录', icon: 'error' });
       set({ loading: false });
@@ -358,13 +369,24 @@ export const useAppStore = create<AppState>((set, get) => ({
       });
 
       if (result && result.success) {
+        track(TRACK.SELECT_SUCCESS, { slotCount: availableSlots.length, isProxy: isProxy === true });
         await get().fetchEvents(); // 成功后刷新数据
         return { success: true };
       }
+      track(TRACK.SELECT_FAIL, {
+        slotCount: availableSlots.length,
+        isProxy: isProxy === true,
+        error: String(result?.error || '').slice(0, 120)
+      });
       set({ loading: false });
       return { success: false, error: result?.error };
     } catch (error: any) {
       console.error('Update availability error:', error);
+      track(TRACK.SELECT_FAIL, {
+        slotCount: availableSlots.length,
+        isProxy: isProxy === true,
+        error: String(error?.message || '').slice(0, 120)
+      });
       set({ loading: false });
       return { success: false, error: error?.message };
     }
@@ -372,8 +394,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   confirmTimeAPI: async (eventId: string, slots: Slot | Slot[]) => {
     set({ loading: true });
+    // 提到 try 外层：catch 分支也要用它上报埋点
+    const slotsArray = Array.isArray(slots) ? slots : [slots];
     try {
-      const slotsArray = Array.isArray(slots) ? slots : [slots];
 
       const packedSlot = {
         date: slotsArray.map(s => s.date).join(','),
@@ -387,13 +410,22 @@ export const useAppStore = create<AppState>((set, get) => ({
       });
 
       if (result && result.success) {
+        track(TRACK.DECISION_CONFIRM_SUCCESS, { slotCount: slotsArray.length });
         await get().fetchEvents();
         return { success: true };
       }
+      track(TRACK.DECISION_CONFIRM_FAIL, {
+        slotCount: slotsArray.length,
+        error: String(result?.error || '').slice(0, 120)
+      });
       set({ loading: false });
       return { success: false, error: result?.error };
     } catch (error: any) {
       console.error('Confirm time error:', error);
+      track(TRACK.DECISION_CONFIRM_FAIL, {
+        slotCount: slotsArray.length,
+        error: String(error?.message || '').slice(0, 120)
+      });
       set({ loading: false });
       return { success: false, error: error?.message };
     }
@@ -429,6 +461,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ loading: true });
     try {
       const result = await requestAPI(`/events/${eventId}/members`, 'POST', { action: 'LEAVE_EVENT' });
+      track(TRACK.EVENT_LEAVE, { success: result?.success ? 1 : 0 });
       if (!result?.success) {
         set({ loading: false });
         return false;

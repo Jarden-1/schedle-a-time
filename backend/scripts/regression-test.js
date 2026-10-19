@@ -126,6 +126,23 @@ const EventModel = {
   updateMany: async () => ({ matchedCount: 0, modifiedCount: 0 })
 };
 
+const telemetryDocs = [];
+const errorDocs = [];
+
+const TelemetryModel = {
+  insertMany: async (docs) => {
+    telemetryDocs.push(...docs);
+    return docs;
+  }
+};
+
+const ErrorLogModel = {
+  create: async (doc) => {
+    errorDocs.push(doc);
+    return doc;
+  }
+};
+
 const UserPreferenceModel = {
   findOne: async (filter) => preferences.get(filter.openid) || null,
   findOneAndUpdate: async (filter, update) => {
@@ -207,6 +224,8 @@ Module._load = function patchedLoad(request, parent, isMain) {
   if (request === 'cors') return () => (req, res, next) => next();
   if (request === './models/Event') return StubEventModel;
   if (request === './models/UserPreference') return UserPreferenceModel;
+  if (request === './models/TelemetryEvent') return TelemetryModel;
+  if (request === './models/ErrorLog') return ErrorLogModel;
   return originalLoad.call(this, request, parent, isMain);
 };
 
@@ -740,6 +759,53 @@ const test = async (name, fn) => {
     });
     const bob = res.body.data.participants.find(p => p.openid === 'bob');
     assert.ok(bob.availableSlots.length > 0);
+  });
+
+  // ---------- 埋点接口 ----------
+  await test('埋点接口接受批量事件并绑定 openid', async () => {
+    telemetryDocs.length = 0;
+    const res = await invoke('POST', '/api/telemetry', {
+      openid: 'alice',
+      body: {
+        events: [
+          { ts: Date.now(), event: 'page_view', page: 'index', sessionId: 's_1', version: '1.4.0' },
+          { ts: Date.now(), event: 'select_submit', page: 'event_select', sessionId: 's_1', props: { slotCount: 3 } }
+        ]
+      }
+    });
+    assert.strictEqual(res.statusCode, 200, JSON.stringify(res.body));
+    assert.strictEqual(telemetryDocs.length, 2);
+    assert.ok(telemetryDocs.every(doc => doc.openid === 'alice'));
+    assert.strictEqual(telemetryDocs[1].props.slotCount, 3);
+  });
+
+  await test('埋点接口允许匿名上报（登录失败也要能上报）', async () => {
+    telemetryDocs.length = 0;
+    const res = await invoke('POST', '/api/telemetry', {
+      openid: '',
+      body: { errors: [{ message: 'login failed', stack: 'x' }] }
+    });
+    assert.strictEqual(res.statusCode, 200);
+    assert.strictEqual(errorDocs.length, 1);
+    assert.strictEqual(errorDocs[0].source, 'miniapp');
+  });
+
+  await test('埋点批量上限 50 条', async () => {
+    telemetryDocs.length = 0;
+    const events = Array.from({ length: 80 }, (_, i) => ({ ts: Date.now(), event: `e${i}` }));
+    const res = await invoke('POST', '/api/telemetry', { openid: 'alice', body: { events } });
+    assert.strictEqual(res.statusCode, 200);
+    assert.strictEqual(telemetryDocs.length, 50);
+  });
+
+  await test('埋点 props 非法结构被过滤', async () => {
+    telemetryDocs.length = 0;
+    const res = await invoke('POST', '/api/telemetry', {
+      openid: 'alice',
+      body: { events: [{ ts: Date.now(), event: 'x', props: { ok: 1, nested: { a: 1 }, arr: [1, 2] } }] }
+    });
+    assert.strictEqual(res.statusCode, 200);
+    assert.deepStrictEqual(Object.keys(telemetryDocs[0].props), ['ok']);
   });
 
   // ---------- 上传：解码重编码 ----------

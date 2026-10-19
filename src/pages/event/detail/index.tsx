@@ -9,8 +9,12 @@ import EmptyState from '@/components/EmptyState';
 import LoginCard from '@/components/LoginCard';
 import { getEventStatus, getMergedConfirmedSlots, isEventLocked } from './helpers';
 import './index.scss';
+import { usePageView } from '@/hooks/usePageView';
+import { track } from '@/services/telemetry';
+import { TRACK } from '@/constants/app';
 
 export default function EventDetail() {
+  usePageView('event_detail');
   const [event, setEvent] = useState<Event | null>(null);
   const [eventId, setEventId] = useState<string>('');
   const [myNickname, setMyNickname] = useState('');
@@ -160,6 +164,7 @@ export default function EventDetail() {
   });
 
   const handleShare = () => {
+    track(TRACK.EVENT_SHARE);
     Taro.showShareMenu({ withShareTicket: true });
   };
 

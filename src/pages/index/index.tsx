@@ -6,6 +6,9 @@ import { useAppStore } from '@/store';
 import { formatDate } from '@/utils';
 import SwipeAction from '@/components/SwipeAction';
 import './index.scss';
+import { usePageView } from '@/hooks/usePageView';
+import { track } from '@/services/telemetry';
+import { TRACK } from '@/constants/app';
 
 type TabKey = 'all' | 'created' | 'joined';
 
@@ -19,6 +22,7 @@ type SwipeState = {
 const ACTION_ITEM_WIDTH = 84;
 
 export default function Index() {
+  usePageView('index');
   const [activeTab, setActiveTab] = useState<TabKey>('all');
   const [loaded, setLoaded] = useState(false);
   const [localEvents, setLocalEvents] = useState<Event[]>([]);
@@ -128,6 +132,7 @@ export default function Index() {
   };
 
   const handleEventClick = (eventId: string) => {
+    track(TRACK.EVENT_OPEN);
     Taro.navigateTo({ url: `/pages/event/detail/index?id=${eventId}` });
   };
   // 🚨 修复 1：强制大写匹配，防止拿不到文字

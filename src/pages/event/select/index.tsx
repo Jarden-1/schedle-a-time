@@ -10,11 +10,15 @@ import LoginCard from '@/components/LoginCard';
 import { findParticipantForSelection, getSubmitNickName, isProxyRoute } from './helpers';
 import './index.scss';
 import guideGif from '@/assets/guide/time-select-guide.gif';
+import { usePageView } from '@/hooks/usePageView';
+import { track } from '@/services/telemetry';
+import { TRACK } from '@/constants/app';
 
 const TEMPLATE_ID = 'WENxWVN5m0myVwQAeA99G9ryFIhFHu5hcQFb1BLaSJU';
 const PRESET_UNAVAILABLE_TIP_KEY = 'guide_preset_unavailable_seen';
 
 export default function SelectTime() {
+  usePageView('event_select');
   const [event, setEvent] = useState<Event | null>(null);
   const [nickname, setNickname] = useState('');
   const [isProxyMode, setIsProxyMode] = useState(false);
@@ -234,6 +238,7 @@ export default function SelectTime() {
 
   const handleApplyWeeklyUnavailable = useCallback(async () => {
     if (!event) return;
+    track(TRACK.SELECT_APPLY_PRESET);
     const settings = await fetchWeeklyUnavailableAPI();
     applyDefaultSelection(event, settings?.weeklyUnavailableSlots || weeklyUnavailableSlots);
     Taro.showToast({ title: '已套用常规不可用时段', icon: 'none' });
@@ -286,6 +291,7 @@ export default function SelectTime() {
     Taro.showLoading({ title: isUpdate ? '更新中...' : '提交中...' });
 
     try {
+      track(TRACK.SELECT_SUBMIT, { slotCount: selectedSlots.size, isProxy: isProxyMode ? 1 : 0 });
       const result = await updateAvailabilityAPI(event.id, finalNickname, Array.from(selectedSlots), isProxyMode);
       Taro.hideLoading();
 
