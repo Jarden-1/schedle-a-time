@@ -5,6 +5,8 @@ import { Event, CandidateSlot, TimeMode } from '@/types';
 import { useAppStore } from '@/store';
 import { formatDate, formatTime, parseSlotKey, findBestSlidingWindows, findBestDateWindows, generateTimeSlots, generateDateSlots, getParticipantDisplayName, getParticipantKey } from '@/utils';
 import TimeGridSelector from '@/components/TimeGridSelector';
+import RecommendCard from './RecommendCard';
+import DecisionEmptyState from './DecisionEmptyState';
 import Loading from '@/components/Loading';
 import './index.scss';
 import { usePageView } from '@/hooks/usePageView';
@@ -485,55 +487,19 @@ export default function DecisionPanel() {
                 )}
 
                 {topMergedSlots.map((slot, index) => {
-                  // 🚨 核心修复：判断该卡片包含的所有 slotKey 是否都在 selectedKeys 中
                   const isSelected = slot.slotKeys.length > 0 && slot.slotKeys.every((k: string) => selectedKeys.has(k));
                   const summary = getDecisionSummary(slot.availableIds || slot.availableUsers || [], slot.recommendReason);
 
                   return (
-                    <View
+                    <RecommendCard
                       key={`merged-${slot.date}-${slot.startTime || slot.startDate}`}
-                      className={`top3-card rank-${index + 1} ${isSelected ? 'selected' : ''}`}
+                      slot={slot}
+                      index={index}
+                      isSelected={isSelected}
+                      summary={summary}
+                      isDateOnly={isDateOnly}
                       onClick={() => handleTop5Click(slot.slotKeys)}
-                    >
-                      <View className="recommend-card-top">
-                        <View className="rank-badge">Top {index + 1}</View>
-                        <View className="match-rate">
-                          <Text className="rate-text">{Math.round(slot.matchRate * 100)}%</Text>
-                          <Text className="count-text">{slot.availableCount}/{slot.totalCount} 人</Text>
-                        </View>
-                      </View>
-
-                      <View className="slot-info">
-                        <Text className="date">
-                          {isDateOnly && slot.startDate !== slot.endDate
-                            ? `${formatDate(slot.startDate, 'MM/DD')}(${weekNames[new Date(slot.startDate.replace(/-/g, '/')).getDay()]}) - ${formatDate(slot.endDate, 'MM/DD')}(${weekNames[new Date(slot.endDate.replace(/-/g, '/')).getDay()]})`
-                            : `${formatDate(slot.date, 'MM/DD')}(${weekNames[new Date(slot.date.replace(/-/g, '/')).getDay()]})`
-                          }
-                        </Text>
-                        {!isDateOnly && <Text className="time">{formatTime(slot.startTime)} - {formatTime(slot.endTime)}</Text>}
-                        {slot.slotKeys.length > 1 && (
-                          <Text className="merged-hint">{isDateOnly ? `连续 ${slot.slotKeys.length} 天` : `连续 ${slot.slotKeys.length} 个时段`}</Text>
-                        )}
-                      </View>
-
-                      <View className={`vip-line ${summary.vipUnavailableUsers.length > 0 ? 'warn' : ''}`}>
-                        <Text>{summary.vipText}</Text>
-                        {summary.vipUnavailableUsers.length > 0 ? <Text className="vip-absent">缺席：{summary.vipUnavailableText}</Text> : null}
-                      </View>
-
-                      <View className="reason-line">
-                        <Text className="reason-label">推荐原因</Text>
-                        <Text className="reason-text">{summary.reasonText}</Text>
-                      </View>
-
-                      <View className="absent-line">
-                        <Text className="reason-label">没空</Text>
-                        <Text className="absent-text">{summary.unavailableUsers.length === 0 ? '无' : summary.unavailableText}</Text>
-                      </View>
-
-                      {/* 🚨 新增：右上角选中角标 */}
-                      {isSelected && <View className="selected-icon">✓</View>}
-                    </View>
+                    />
                   );
                 })}
               </>
@@ -546,13 +512,11 @@ export default function DecisionPanel() {
           </View>
         </>
       ) : (
-        <View className="decision-empty-state">
-          <View className="empty-icon-wrap">
-            <Text className="empty-icon">{emptyState.icon}</Text>
-          </View>
-          <Text className="empty-title">{emptyState.title}</Text>
-          <Text className="empty-tip">{emptyState.tip}</Text>
-        </View>
+        <DecisionEmptyState
+          icon={emptyState.icon}
+          title={emptyState.title}
+          tip={emptyState.tip}
+        />
       )}
 
       {candidateSlots.length > 0 && event.timeMode === TimeMode.TIME_SLOT && slotKeys.length > 0 && (

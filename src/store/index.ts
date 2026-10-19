@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import Taro from '@tarojs/taro';
 import { Announcement, Event, User, CreateEventForm, EventStatus, WeeklyUnavailableSettings } from '@/types';
+import { EventListResult, AvailabilityResult, ConfirmResult, WeeklyUnavailableResult, MemberActionResult } from '@/types/api';
 import { generateId, hasCompleteUserProfile, normalizeUser } from '@/utils';
 import { requestAPI, UPLOAD_URL } from '@/services/api';
 import { track } from '@/services/telemetry';
@@ -202,11 +203,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       let collected: Event[] = [];
 
       for (let page = 0; page < maxPages; page++) {
-        const result = await requestAPI(`/events?limit=${pageSize}&offset=${offset}`, 'GET');
+        const result = await requestAPI(`/events?limit=${pageSize}&offset=${offset}`, 'GET') as EventListResult;
         if (!result?.success || !Array.isArray(result.data)) {
           throw new Error('获取失败');
         }
-        collected = collected.concat(result.data as Event[]);
+        collected = collected.concat(result.data);
         offset += result.data.length;
         if (!result.pagination?.hasMore || result.data.length === 0) break;
       }
@@ -366,7 +367,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         openid,
         availableSlots,
         isProxy: isProxy === true
-      });
+      }) as AvailabilityResult;
 
       if (result && result.success) {
         track(TRACK.SELECT_SUCCESS, { slotCount: availableSlots.length, isProxy: isProxy === true });
@@ -407,7 +408,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const result = await requestAPI(`/events/${eventId}/confirm`, 'POST', {
         confirmedSlots: slotsArray,
         confirmedSlot: packedSlot
-      });
+      }) as ConfirmResult;
 
       if (result && result.success) {
         track(TRACK.DECISION_CONFIRM_SUCCESS, { slotCount: slotsArray.length });
@@ -440,7 +441,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         targetNickName,
         targetDisplayName,
         action
-      });
+      }) as MemberActionResult;
 
       if (!result?.success) {
         set({ loading: false });
@@ -460,7 +461,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   leaveEventAPI: async (eventId: string) => {
     set({ loading: true });
     try {
-      const result = await requestAPI(`/events/${eventId}/members`, 'POST', { action: 'LEAVE_EVENT' });
+      const result = await requestAPI(`/events/${eventId}/members`, 'POST', { action: 'LEAVE_EVENT' }) as MemberActionResult;
       track(TRACK.EVENT_LEAVE, { success: result?.success ? 1 : 0 });
       if (!result?.success) {
         set({ loading: false });
@@ -503,7 +504,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   autoApplyWeeklyUnavailable: Taro.getStorageSync('autoApplyWeeklyUnavailable') === true,
   fetchWeeklyUnavailableAPI: async () => {
     try {
-      const result = await requestAPI('/user/weekly-unavailable', 'GET');
+      const result = await requestAPI('/user/weekly-unavailable', 'GET') as WeeklyUnavailableResult;
       if (!result?.success || !result.data) return null;
       const settings = result.data as WeeklyUnavailableSettings;
       const slots = Array.isArray(settings.weeklyUnavailableSlots) ? settings.weeklyUnavailableSlots : [];
@@ -529,7 +530,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const result = await requestAPI('/user/weekly-unavailable', 'PUT', {
         weeklyUnavailableSlots,
         autoApplyWeeklyUnavailable
-      });
+      }) as WeeklyUnavailableResult;
       if (!result?.success || !result.data) return false;
       const slots = Array.isArray(result.data.weeklyUnavailableSlots) ? result.data.weeklyUnavailableSlots : [];
       const autoApply = result.data.autoApplyWeeklyUnavailable === true;
