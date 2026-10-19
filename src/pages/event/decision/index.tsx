@@ -293,10 +293,11 @@ export default function DecisionPanel() {
         p?.hasSubmitted === true || (Array.isArray(p?.availableSlots) && p.availableSlots.length > 0)
       )).length;
 
-  // 🚨 没有任何人有时段时，仍然允许发起人手动选一个并确认
-  const emptyHintTitle = submittedCount > 0
-    ? `${submittedCount} 人已填写，但当前时段无人有空`
-    : '还没有人填写时间';
+  // 🚨 完全没有人有空时不提供选择与确认，只做状态提示
+  const emptyHintTitle = submittedCount > 0 ? '没有任何时段有人有空' : '还没有人填写时间';
+  const emptyHintDesc = submittedCount > 0
+    ? `${submittedCount} 人已填写，但所有时段都没空。可以回到详情页调整时间范围，让大家重新填写。`
+    : '把活动分享给参与者，等大家填写后再来确认时间。';
 
   // 精选 Top 3，更多探索交给热力图
   const topMergedSlots = useMemo(() => bestWindows.slice(0, 3), [bestWindows]);
@@ -524,16 +525,16 @@ export default function DecisionPanel() {
           </View>
         </>
       ) : (
-        <View className="recommend-empty">
-          <Text className="empty-title">{emptyHintTitle}</Text>
-          <Text className="empty-desc">
-            可以直接在下面的{isDateOnly ? '日期列表' : '热力图'}中手动选择，
-            即使没有人有空，也可以照常确认时间。
-          </Text>
+        <View className="decision-empty-note">
+          <Text className="note-icon">💡</Text>
+          <View className="note-body">
+            <Text className="note-title">{emptyHintTitle}</Text>
+            <Text className="note-desc">{emptyHintDesc}</Text>
+          </View>
         </View>
       )}
 
-      {event.timeMode === TimeMode.TIME_SLOT && slotKeys.length > 0 && (
+      {candidateSlots.length > 0 && event.timeMode === TimeMode.TIME_SLOT && slotKeys.length > 0 && (
             <View className="heatmap-section">
               <View className="heatmap-header">
                 <View className="header-top-row">
@@ -572,7 +573,7 @@ export default function DecisionPanel() {
             </View>
           )}
           
-          {isDateOnly && dateLabels.length > 0 && (
+          {candidateSlots.length > 0 && isDateOnly && dateLabels.length > 0 && (
             <View className="date-only-section">
               <Text className="section-title">🟩 全部候选日期</Text>
               <View className="date-grid">
@@ -608,7 +609,7 @@ export default function DecisionPanel() {
           )}
 
           {/* 只有在有选中项且计算出统计数据时，才渲染整个底部容器 */}
-          {selectedKeys.size > 0 && aggregatedStats && (
+          {candidateSlots.length > 0 && selectedKeys.size > 0 && aggregatedStats && (
             <View className="confirm-section safe-bottom">
               <View className="dock-header">
                 <View className="dock-header-left">
