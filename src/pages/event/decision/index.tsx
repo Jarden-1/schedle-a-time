@@ -3,7 +3,7 @@ import { View, Text, Button, ScrollView, Image, Slider } from '@tarojs/component
 import { useState, useMemo } from 'react';
 import { Event, CandidateSlot, TimeMode } from '@/types';
 import { useAppStore } from '@/store';
-import { formatDate, formatTime, parseSlotKey, findBestSlidingWindows, findBestDateWindows, generateTimeSlots, getParticipantDisplayName } from '@/utils';
+import { formatDate, formatTime, parseSlotKey, findBestSlidingWindows, findBestDateWindows, generateTimeSlots, generateDateSlots, getParticipantDisplayName, getParticipantKey } from '@/utils';
 import TimeGridSelector from '@/components/TimeGridSelector';
 import Loading from '@/components/Loading';
 import './index.scss';
@@ -36,7 +36,7 @@ export default function DecisionPanel() {
   const weekNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
   const isDateOnly = event?.timeMode === TimeMode.DATE_ONLY || (event?.timeMode as any) === 'DATE_ONLY';
 
-  const { events, confirmTimeAPI, getEventById, currentUser } = useAppStore();
+  const { confirmTimeAPI, getEventById, currentUser } = useAppStore();
 
   const formatDurationLabel = (minutes: number) => {
     if (minutes < 60) return `${minutes}分钟`;
@@ -52,9 +52,12 @@ export default function DecisionPanel() {
     if (cloudEvent) {
       setEvent(cloudEvent);
     } else {
-      // 回退到本地
-      const localEvent = events.find(e => e.id === id);
-      if (localEvent) setEvent(localEvent);
+      // 只有「网络类」错误才允许回退到本地缓存；404 说明活动已被删除
+      const { eventLoadError: loadError, events: cachedEvents } = useAppStore.getState();
+      if (loadError?.type !== 'not_found' && loadError?.type !== 'auth') {
+        const localEvent = cachedEvents.find(e => e.id === id);
+        if (localEvent) setEvent(localEvent);
+      }
     }
 
     setInitialLoading(false);
@@ -70,45 +73,67 @@ export default function DecisionPanel() {
   const isAdmin = !!(myOpenid && event?.adminIds?.includes(myOpenid));
   const canManage = isCreator || isAdmin;
 
+  // 🚨 统一用 participantId / openid 作为身份标识，显示名只用于展示
+  const participantEntries = useMemo(() => {
+    return (event?.participants || [])
+      .map(participant => ({
+        id: getParticipantKey(participant),
+        name: getParticipantDisplayName(participant),
+        participant
+      }))
+      .filter(entry => entry.id);
+  }, [event]);
+
+  const participantIds = useMemo(() => participantEntries.map(entry => entry.id), [participantEntries]);
+
+  const nameById = useMemo(
+    () => new Map<string, string>(participantEntries.map(entry => [entry.id, entry.name] as [string, string])),
+    [participantEntries]
+  );
+
+  const participantById = useMemo(
+    () => new Map<string, any>(participantEntries.map(entry => [entry.id, entry.participant] as [string, any])),
+    [participantEntries]
+  );
+
   const candidateSlots = useMemo((): CandidateSlot[] => {
-    if (!event || event.participants.length === 0) return [];
+    if (!event || participantEntries.length === 0) return [];
 
     const slotMap = new Map<string, string[]>();
-    event.participants.forEach(participant => {
-      const displayName = getParticipantDisplayName(participant);
-      participant.availableSlots.forEach(slot => {
+    participantEntries.forEach(({ id, participant }) => {
+      const slots = Array.isArray(participant.availableSlots) ? participant.availableSlots : [];
+      slots.forEach((slot: string) => {
         if (!slotMap.has(slot)) slotMap.set(slot, []);
-        slotMap.get(slot)!.push(displayName);
+        const owners = slotMap.get(slot)!;
+        if (!owners.includes(id)) owners.push(id);
       });
     });
-    
-    const allParticipants = event.participants.map(p => getParticipantDisplayName(p));
-    const candidates: CandidateSlot[] = Array.from(slotMap.entries()).map(([slotKey, availableUsers]) => {
+
+    const totalCount = participantIds.length;
+    const candidates: CandidateSlot[] = Array.from(slotMap.entries()).map(([slotKey, availableIds]) => {
       const { date, startTime, endTime } = parseSlotKey(slotKey);
-      const unavailableUsers = allParticipants.filter(name => !availableUsers.includes(name));
+      const unavailableIds = participantIds.filter(id => !availableIds.includes(id));
       return {
         slot: { date, startTime, endTime },
-        availableCount: availableUsers.length,
-        totalCount: allParticipants.length,
-        availableUsers,
-        unavailableUsers,
-        matchRate: allParticipants.length > 0 ? availableUsers.length / allParticipants.length : 0
+        availableCount: availableIds.length,
+        totalCount,
+        availableIds,
+        unavailableIds,
+        availableUsers: availableIds.map(id => nameById.get(id) || id),
+        unavailableUsers: unavailableIds.map(id => nameById.get(id) || id),
+        matchRate: totalCount > 0 ? availableIds.length / totalCount : 0
       };
     });
-    
+
     return candidates.sort((a, b) => b.matchRate - a.matchRate || b.availableCount - a.availableCount);
-  }, [event]);
+  }, [event, participantEntries, participantIds, nameById]);
 
-  const participantNames = useMemo(() => {
-    return event?.participants.map(p => getParticipantDisplayName(p)) || [];
-  }, [event]);
-
-  const vipNames = useMemo(() => {
-    if (!event?.participants || !Array.isArray(event.vipIds)) return [];
-    return event.participants
-      .filter(p => p.openid && event.vipIds?.includes(p.openid))
-      .map(p => getParticipantDisplayName(p));
-  }, [event]);
+  const vipKeys = useMemo(() => {
+    if (!event || !Array.isArray(event.vipIds)) return [] as string[];
+    return participantEntries
+      .filter(entry => entry.participant?.openid && event.vipIds?.includes(entry.participant.openid))
+      .map(entry => entry.id);
+  }, [event, participantEntries]);
 
   const summarizeNames = (names: string[], limit = 2) => {
     if (names.length === 0) return '无';
@@ -120,14 +145,16 @@ export default function DecisionPanel() {
     return (reason || '').replace(/[^\u4e00-\u9fa5A-Za-z0-9]/g, '').trim();
   };
 
-  const getDecisionSummary = (availableUsers: string[], reason?: string) => {
-    const availableSet = new Set(availableUsers);
-    const unavailableUsers = participantNames.filter(name => !availableSet.has(name));
-    const vipAvailableUsers = vipNames.filter(name => availableSet.has(name));
-    const vipUnavailableUsers = vipNames.filter(name => !availableSet.has(name));
+  const getDecisionSummary = (availableIds: string[], reason?: string) => {
+    const availableSet = new Set(availableIds);
+    const unavailableIds = participantIds.filter(id => !availableSet.has(id));
+    const unavailableUsers = unavailableIds.map(id => nameById.get(id) || id);
+    const vipAvailableCount = vipKeys.filter(id => availableSet.has(id)).length;
+    const vipUnavailableIds = vipKeys.filter(id => !availableSet.has(id));
+    const vipUnavailableUsers = vipUnavailableIds.map(id => nameById.get(id) || id);
     const reasonParts: string[] = [];
 
-    if (vipNames.length > 0) {
+    if (vipKeys.length > 0) {
       reasonParts.push(vipUnavailableUsers.length === 0 ? '重点嘉宾全员可参加' : `${summarizeNames(vipUnavailableUsers, 1)}等重点嘉宾没空`);
     }
     reasonParts.push(unavailableUsers.length === 0 ? '全员都有空' : `仅 ${unavailableUsers.length} 人没空`);
@@ -139,9 +166,11 @@ export default function DecisionPanel() {
 
     return {
       unavailableUsers,
-      vipAvailableUsers,
+      unavailableIds,
+      vipAvailableCount,
       vipUnavailableUsers,
-      vipText: vipNames.length > 0 ? `重点嘉宾 ${vipAvailableUsers.length}/${vipNames.length} 可参加` : '未设置重点嘉宾',
+      vipUnavailableIds,
+      vipText: vipKeys.length > 0 ? `重点嘉宾 ${vipAvailableCount}/${vipKeys.length} 可参加` : '未设置重点嘉宾',
       reasonText: reasonParts.slice(0, 2).join('，'),
       unavailableText: summarizeNames(unavailableUsers, 2),
       vipUnavailableText: summarizeNames(vipUnavailableUsers, 1)
@@ -154,11 +183,8 @@ export default function DecisionPanel() {
 
     const allKeys: string[] = [];
     if (isDateOnly) {
-      const start = new Date(event.dateRange.start);
-      const end = new Date(event.dateRange.end);
-      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-        allKeys.push(d.toISOString().split('T')[0]);
-      }
+      // 🚨 用 dayjs 生成日期，避免 toISOString() 在东八区凌晨退回前一天
+      allKeys.push(...generateDateSlots(event.dateRange.start, event.dateRange.end));
     } else {
       const slots = generateTimeSlots(
         event.dateRange.start,
@@ -213,32 +239,36 @@ export default function DecisionPanel() {
   const aggregatedStats = useMemo(() => {
     if (selectedKeys.size === 0) return null;
     const keysArr = Array.from(selectedKeys).sort();
-    const allParticipants = participantNames;
 
-    let available = [...allParticipants];
+    let availableIds = [...participantIds];
     keysArr.forEach(key => {
       const slotData = candidateSlots.find(c => {
         const k = isDateOnly ? c.slot.date : `${c.slot.date}_${c.slot.startTime}-${c.slot.endTime}`;
         return k === key;
       });
-      const usersInThisSlot = slotData ? slotData.availableUsers : [];
-      // 核心求交集算法
-      available = available.filter(u => usersInThisSlot.includes(u));
+      const idsInThisSlot = slotData ? slotData.availableIds : [];
+      // 核心求交集算法（按稳定 ID，不按姓名）
+      availableIds = availableIds.filter(id => idsInThisSlot.includes(id));
     });
 
-    const unavailable = allParticipants.filter(u => !available.includes(u));
-    const vipAvailable = vipNames.filter(name => available.includes(name));
-    const vipUnavailable = vipNames.filter(name => !available.includes(name));
+    const availableSet = new Set(availableIds);
+    const unavailableIds = participantIds.filter(id => !availableSet.has(id));
+    const vipAvailableIds = vipKeys.filter(id => availableSet.has(id));
+    const vipUnavailableIds = vipKeys.filter(id => !availableSet.has(id));
 
     return {
-      availableUsers: available,
-      unavailableUsers: unavailable,
-      vipAvailableUsers: vipAvailable,
-      vipUnavailableUsers: vipUnavailable,
+      availableIds,
+      unavailableIds,
+      vipAvailableIds,
+      vipUnavailableIds,
+      availableUsers: availableIds.map(id => nameById.get(id) || id),
+      unavailableUsers: unavailableIds.map(id => nameById.get(id) || id),
+      vipAvailableUsers: vipAvailableIds.map(id => nameById.get(id) || id),
+      vipUnavailableUsers: vipUnavailableIds.map(id => nameById.get(id) || id),
       count: keysArr.length,
       firstSlotDisplay: keysArr[0]
     };
-  }, [selectedKeys, candidateSlots, participantNames, vipNames, isDateOnly]);
+  }, [selectedKeys, candidateSlots, participantIds, nameById, vipKeys, isDateOnly]);
 
   const handleTop5Click = (slotKeys: string[]) => {
     setSelectedKeys(new Set(slotKeys));
@@ -318,6 +348,20 @@ export default function DecisionPanel() {
       <View className="decision-page">
         <View className="error-state">
           <Text className="error-text">事件加载失败</Text>
+          <Button className="retry-btn" onClick={() => Taro.navigateBack()}>返回</Button>
+        </View>
+      </View>
+    );
+  }
+
+  // 🚨 决策数据门禁：关闭「决策面板公开」后，只有发起人/管理员能看
+  const decisionAllowed = canManage || event.isDecisionPublic === true || event.decisionRedacted === false;
+  if (!decisionAllowed) {
+    return (
+      <View className="decision-page">
+        <View className="error-state">
+          <Text className="error-text">决策面板未公开</Text>
+          <Text className="empty-desc">发起人关闭了「决策面板公开」，只有管理员可以查看大家的时间安排。</Text>
           <Button className="retry-btn" onClick={() => Taro.navigateBack()}>返回</Button>
         </View>
       </View>
@@ -410,7 +454,7 @@ export default function DecisionPanel() {
                 {topMergedSlots.map((slot, index) => {
                   // 🚨 核心修复：判断该卡片包含的所有 slotKey 是否都在 selectedKeys 中
                   const isSelected = slot.slotKeys.length > 0 && slot.slotKeys.every((k: string) => selectedKeys.has(k));
-                  const summary = getDecisionSummary(slot.availableUsers || [], slot.recommendReason);
+                  const summary = getDecisionSummary(slot.availableIds || slot.availableUsers || [], slot.recommendReason);
 
                   return (
                     <View
@@ -573,10 +617,10 @@ export default function DecisionPanel() {
                 )}
               </View>
 
-              {vipNames.length > 0 && (
+              {vipKeys.length > 0 && (
                 <View className={`dock-vip-bar ${aggregatedStats.vipUnavailableUsers.length > 0 ? 'warn' : ''}`}>
                   <Text className="dock-vip-text">
-                    重点嘉宾 {aggregatedStats.vipAvailableUsers.length}/{vipNames.length} 可参加
+                    重点嘉宾 {aggregatedStats.vipAvailableUsers.length}/{vipKeys.length} 可参加
                   </Text>
                   {aggregatedStats.vipUnavailableUsers.length > 0 && (
                     <Text className="dock-vip-missing">
@@ -592,10 +636,11 @@ export default function DecisionPanel() {
                   <Text className="dock-group-title">以下 {aggregatedStats.unavailableUsers.length} 人在部分或全部{isDateOnly ? '日期' : '时段'}没空：</Text>
                   <ScrollView scrollX className="user-scroll" enableFlex>
                     <View className="user-list">
-                      {aggregatedStats.unavailableUsers.map(name => {
-                        const p = event.participants.find(x => getParticipantDisplayName(x) === name);
+                      {aggregatedStats.unavailableIds.map(id => {
+                        const p = participantById.get(id);
+                        const name = nameById.get(id) || id;
                         return (
-                          <View key={name} className="user-item unavailable">
+                          <View key={id} className="user-item unavailable">
                             <View className="user-avatar">
                               {p?.avatarUrl ? <Image className="avatar-img" src={p.avatarUrl} mode="aspectFill" /> : <Text className="avatar-fallback">👤</Text>}
                             </View>

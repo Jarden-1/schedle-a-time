@@ -13,7 +13,7 @@ export default function SlotDetail() {
   const [initialLoading, setInitialLoading] = useState(true);
   const [confirming, setConfirming] = useState(false);
   const [expandedUnavailable, setExpandedUnavailable] = useState<Set<string>>(new Set());
-  const { events, getEventById, confirmTimeAPI, currentUser } = useAppStore();
+  const { getEventById, confirmTimeAPI, currentUser } = useAppStore();
 
   // 在组件顶层定义
   const weekNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
@@ -128,8 +128,12 @@ export default function SlotDetail() {
     if (cloudEvent) {
       setEvent(cloudEvent);
     } else {
-      const localEvent = events.find(e => e.id === id);
-      if (localEvent) setEvent(localEvent);
+      // 只有网络类错误才回退缓存；404 说明活动已被删除
+      const { eventLoadError: loadError, events: cachedEvents } = useAppStore.getState();
+      if (loadError?.type !== 'not_found' && loadError?.type !== 'auth') {
+        const localEvent = cachedEvents.find(e => e.id === id);
+        if (localEvent) setEvent(localEvent);
+      }
     }
     if (slot) {
       setSlotKey(decodeURIComponent(slot));
@@ -191,7 +195,8 @@ export default function SlotDetail() {
         available.push({ ...p, displayName, participantKey });
       } else {
         const missingRanges = formatMissingRanges(missingKeys);
-        const missingStatus = availableSlots.length === 0
+        const hasSubmitted = p.hasSubmitted === true || availableSlots.length > 0;
+        const missingStatus = !hasSubmitted
           ? '未填写时间'
           : missingKeys.length === keys.length
             ? '所选时段均没空'

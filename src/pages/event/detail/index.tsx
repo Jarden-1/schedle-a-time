@@ -118,18 +118,28 @@ export default function EventDetail() {
     const cloudEvent = await getEventById(id);
     if (cloudEvent) {
       setEvent(cloudEvent);
-    } else {
-      const localEvent = events.find(e => e.id === id);
-      if (localEvent) {
-        setEvent(localEvent);
-      }
+      return;
     }
-  }, [events, getEventById, currentUser]);
+
+    // 🚨 只有网络类错误才允许回退到本地缓存；404 说明活动已被删除
+    const { eventLoadError: loadError, events: cachedEvents } = useAppStore.getState();
+    if (loadError?.type === 'not_found' || loadError?.type === 'auth') {
+      setEvent(null);
+      return;
+    }
+    const localEvent = cachedEvents.find(e => e.id === id);
+    if (localEvent) {
+      setEvent(localEvent);
+    }
+  }, [getEventById]);
 
   useEffect(() => {
     if (eventLoadError?.type === 'auth') {
       setEvent(null);
       setShowLogin(true);
+    }
+    if (eventLoadError?.type === 'not_found') {
+      setEvent(null);
     }
   }, [eventLoadError]);
 
@@ -262,14 +272,20 @@ export default function EventDetail() {
   const isLoggedIn = hasCompleteUserProfile(currentUser);
   const selfNick = (myNickname || userNickName).trim();
   // 🚨 终极修复：增加 OpenID 兜底匹配，防止后端 nickName 丢失导致匹配失败
+  const participantHasSubmitted = (p: any) => (
+    p?.hasSubmitted === true || (Array.isArray(p?.availableSlots) && p.availableSlots.length > 0)
+  );
+
   const hasSubmitted = !!event?.participants.some(p => {
     const matchOpenid = !!myOpenid && p.openid === myOpenid;
     const matchNick = !!selfNick && p.nickName === selfNick;
-    return (matchOpenid || matchNick) && Array.isArray(p.availableSlots) && p.availableSlots.length > 0;
+    return (matchOpenid || matchNick) && participantHasSubmitted(p);
   });
 
-  // 🚨 过滤出真正提交了时间段的用户数量
-  const submittedCount = event?.participants.filter(p => Array.isArray(p.availableSlots) && p.availableSlots.length > 0).length || 0;
+  // 🚨 优先用服务端下发的已填写人数（决策不公开时他人时段会被裁剪）
+  const submittedCount = typeof event?.submittedCount === 'number'
+    ? event.submittedCount
+    : event?.participants.filter(participantHasSubmitted).length || 0;
 
   // 🚨 根据 allowInvite 严格控制普通参与者分享权限
   useEffect(() => {

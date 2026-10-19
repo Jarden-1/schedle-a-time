@@ -98,6 +98,12 @@ export default function SelectTime() {
 
     // 获取云端最新数据
     const cloudEvent = await getEventById(id);
+    if (!cloudEvent) {
+      const { eventLoadError: loadError } = useAppStore.getState();
+      if (loadError?.type === 'not_found' || loadError?.type === 'auth') {
+        setEvent(null);
+      }
+    }
     if (cloudEvent) {
       setEvent(cloudEvent);
       // 🚨 移除了 if (!localEvent) 的限制，确保每次拿到云端最新数据都强制触发回显！
@@ -143,8 +149,13 @@ export default function SelectTime() {
       setShowPresetTip(true);
     }
 
-    if (target && Array.isArray(target.availableSlots) && target.availableSlots.length > 0) {
-      setSelectedSlots(new Set(target.availableSlots));
+    const targetHasSubmitted = !!target && (
+      target.hasSubmitted === true ||
+      (Array.isArray(target.availableSlots) && target.availableSlots.length > 0)
+    );
+
+    if (target && targetHasSubmitted) {
+      setSelectedSlots(new Set(Array.isArray(target.availableSlots) ? target.availableSlots : []));
       setNickname(target.nickName);
     } else {
       setNickname(target?.nickName || decodedNick);
@@ -157,13 +168,8 @@ export default function SelectTime() {
   const timeSlots = useMemo(() => {
     if (!event) return [];
     if (event.timeMode === 'date_only') {
-      const slots: string[] = [];
-      const start = new Date(event.dateRange.start);
-      const end = new Date(event.dateRange.end);
-      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-        slots.push(d.toISOString().split('T')[0]);
-      }
-      return slots;
+      // 🚨 用 dayjs 生成，避免 toISOString() 在东八区凌晨退回前一天
+      return generateDateSlots(event.dateRange.start, event.dateRange.end);
     }
 
     return generateTimeSlots(
@@ -177,13 +183,7 @@ export default function SelectTime() {
 
   const dateLabels = useMemo((): string[] => {
     if (!event) return [];
-    const dates: string[] = [];
-    const start = new Date(event.dateRange.start);
-    const end = new Date(event.dateRange.end);
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-      dates.push(d.toISOString().split('T')[0]);
-    }
-    return dates;
+    return generateDateSlots(event.dateRange.start, event.dateRange.end);
   }, [event]);
 
   const rowLabels = useMemo((): string[] => {
@@ -250,9 +250,15 @@ export default function SelectTime() {
       return;
     }
 
+    // 🚨 允许提交空数组：表达「我确实全部没空」，而不是无法撤回
     if (selectedSlots.size === 0) {
-      Taro.showToast({ title: '请至少选择一个时间', icon: 'none' });
-      return;
+      const { confirm } = await Taro.showModal({
+        title: '确认没有空闲时间？',
+        content: '提交后会把你标记为「已填写但全部没空」，之前填过的时间会被清空。',
+        confirmText: '确认提交',
+        cancelText: '再想想'
+      });
+      if (!confirm) return;
     }
 
     // 🚨 安全订阅逻辑：使用 Promise.race 加上 1.5 秒超时保护！
@@ -271,10 +277,9 @@ export default function SelectTime() {
       nickname: finalNickname,
       currentUser
     });
-    const isUpdate = !!(
-      existingParticipant &&
-      existingParticipant.availableSlots &&
-      existingParticipant.availableSlots.length > 0
+    const isUpdate = !!existingParticipant && (
+      existingParticipant.hasSubmitted === true ||
+      (Array.isArray(existingParticipant.availableSlots) && existingParticipant.availableSlots.length > 0)
     );
 
     setSaving(true);
@@ -464,7 +469,7 @@ export default function SelectTime() {
             className="btn-primary"
             onClick={handleSubmit}
             loading={saving}
-            disabled={saving || selectedSlots.size === 0}
+            disabled={saving}
           >
             确认提交
           </Button>

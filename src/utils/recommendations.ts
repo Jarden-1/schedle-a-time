@@ -1,6 +1,6 @@
 import dayjs from 'dayjs';
 
-import { getParticipantDisplayName } from './participants';
+import { getParticipantDisplayName, getParticipantKey } from './participants';
 import { parseSlotKey, timeToMinutes } from './time';
 
 export interface MergedSlot {
@@ -97,6 +97,29 @@ const resolveRecommendationReason = (
   return '⚖️ 优质备选';
 };
 
+const buildIdentityContext = (participants: any[] = [], vipIds: string[] = []) => {
+  const nameByKey = new Map<string, string>();
+  const vipKeys = new Set<string>();
+  participants.forEach((participant) => {
+    const key = getParticipantKey(participant);
+    if (!key) return;
+    nameByKey.set(key, getParticipantDisplayName(participant));
+    if (Array.isArray(vipIds) && participant?.openid && vipIds.includes(participant.openid)) {
+      vipKeys.add(key);
+    }
+  });
+  return { nameByKey, vipKeys };
+};
+
+const resolveAvailableIds = (slot: any): string[] => {
+  if (Array.isArray(slot?.availableIds)) return slot.availableIds;
+  if (Array.isArray(slot?.availableUsers)) return slot.availableUsers;
+  return [];
+};
+
+const toDisplayNames = (ids: string[], nameByKey: Map<string, string>) =>
+  ids.map(id => nameByKey.get(id) || id);
+
 export const findBestSlidingWindows = (
   candidateSlots: any[],
   targetDurationMinutes: number,
@@ -106,7 +129,7 @@ export const findBestSlidingWindows = (
 ): any[] => {
   if (candidateSlots.length === 0 || targetDurationMinutes <= 0) return [];
 
-  const vipNickNames = participants.filter(p => vipIds?.includes(p.openid)).map(p => getParticipantDisplayName(p));
+  const { nameByKey, vipKeys } = buildIdentityContext(participants, vipIds);
   const slotsByDate = new Map<string, any[]>();
   candidateSlots.forEach(slot => {
     const date = slot.slot.date;
@@ -133,22 +156,25 @@ export const findBestSlidingWindows = (
           }
         }
         if (isConsecutive) {
-          let intersectedUsers = windowSlots[0].availableUsers;
+          // 🚨 用稳定身份求交集，避免同名用户被合并成同一个人
+          let intersectedIds: string[] = resolveAvailableIds(windowSlots[0]);
           for (let j = 1; j < windowSlots.length; j++) {
-            intersectedUsers = intersectedUsers.filter((u: string) => windowSlots[j].availableUsers.includes(u));
+            const slotIds = resolveAvailableIds(windowSlots[j]);
+            intersectedIds = intersectedIds.filter((id: string) => slotIds.includes(id));
           }
-          if (intersectedUsers.length > 0) {
+          if (intersectedIds.length > 0) {
             const totalCount = windowSlots[0].totalCount;
-            const vCount = intersectedUsers.filter((u: string) => vipNickNames.includes(u)).length;
-            const nCount = intersectedUsers.length - vCount;
+            const vCount = intersectedIds.filter((id: string) => vipKeys.has(id)).length;
+            const nCount = intersectedIds.length - vCount;
             allWindows.push({
               date: windowSlots[0].slot.date,
               startTime: windowSlots[0].slot.startTime,
               endTime: windowSlots[windowSlots.length - 1].slot.endTime,
-              availableCount: intersectedUsers.length,
+              availableCount: intersectedIds.length,
               totalCount: totalCount,
-              availableUsers: intersectedUsers,
-              matchRate: intersectedUsers.length / totalCount,
+              availableIds: intersectedIds,
+              availableUsers: toDisplayNames(intersectedIds, nameByKey),
+              matchRate: intersectedIds.length / totalCount,
               slotKeys: windowSlots.map(s => `${s.slot.date}_${s.slot.startTime}-${s.slot.endTime}`),
               vipCount: vCount,
               normalCount: nCount,
@@ -182,8 +208,10 @@ export const findBestSlidingWindows = (
       if (existing.date !== newWin.date) return false;
       const hasOverlap = newWin.slotKeys.some((k: string) => existing.slotKeys.includes(k));
       if (!hasOverlap) return false;
-      const sameUsers = existing.availableUsers.length === newWin.availableUsers.length &&
-                        existing.availableUsers.every((u: string) => newWin.availableUsers.includes(u));
+      const existingIds = existing.availableIds || [];
+      const newIds = newWin.availableIds || [];
+      const sameUsers = existingIds.length === newIds.length &&
+                        existingIds.every((id: string) => newIds.includes(id));
       return hasOverlap && sameUsers;
     });
   };
@@ -194,8 +222,8 @@ export const findBestSlidingWindows = (
       top5.push({
         ...window,
         recommendReason: resolveRecommendationReason(window, {
-          hasVips: vipNickNames.length > 0,
-          vipTotal: vipNickNames.length,
+          hasVips: vipKeys.size > 0,
+          vipTotal: vipKeys.size,
           maxAvailable,
           earliestQualifiedKey
         }),
@@ -220,7 +248,7 @@ export const findBestDateWindows = (
   vipIds: string[] = []
 ): any[] => {
   if (candidateSlots.length === 0 || targetDays <= 0) return [];
-  const vipNickNames = participants.filter(p => vipIds?.includes(p.openid)).map(p => getParticipantDisplayName(p));
+  const { nameByKey, vipKeys } = buildIdentityContext(participants, vipIds);
   const sortedSlots = [...candidateSlots].sort((a, b) => a.slot.date.localeCompare(b.slot.date));
 
   let currentDays = Math.min(targetDays, sortedSlots.length);
@@ -241,21 +269,24 @@ export const findBestDateWindows = (
       }
 
       if (isConsecutive || currentDays === 1) {
-        let intersectedUsers = windowSlots[0].availableUsers;
+        // 🚨 同上：按稳定身份求交集
+        let intersectedIds: string[] = resolveAvailableIds(windowSlots[0]);
         for (let j = 1; j < windowSlots.length; j++) {
-          intersectedUsers = intersectedUsers.filter((u: string) => windowSlots[j].availableUsers.includes(u));
+          const slotIds = resolveAvailableIds(windowSlots[j]);
+          intersectedIds = intersectedIds.filter((id: string) => slotIds.includes(id));
         }
-        if (intersectedUsers.length > 0) {
-          const vCount = intersectedUsers.filter((u: string) => vipNickNames.includes(u)).length;
-          const nCount = intersectedUsers.length - vCount;
+        if (intersectedIds.length > 0) {
+          const vCount = intersectedIds.filter((id: string) => vipKeys.has(id)).length;
+          const nCount = intersectedIds.length - vCount;
           allWindows.push({
             date: windowSlots[0].slot.date,
             startDate: windowSlots[0].slot.date,
             endDate: windowSlots[windowSlots.length - 1].slot.date,
-            availableCount: intersectedUsers.length,
+            availableCount: intersectedIds.length,
             totalCount: windowSlots[0].totalCount,
-            availableUsers: intersectedUsers,
-            matchRate: intersectedUsers.length / windowSlots[0].totalCount,
+            availableIds: intersectedIds,
+            availableUsers: toDisplayNames(intersectedIds, nameByKey),
+            matchRate: intersectedIds.length / windowSlots[0].totalCount,
             slotKeys: windowSlots.map(s => s.slot.date),
             vipCount: vCount,
             normalCount: nCount,
@@ -278,8 +309,8 @@ export const findBestDateWindows = (
 
   const isTooSimilar = (newWin: any) => top3.some(existing =>
     existing.slotKeys.some((k: string) => newWin.slotKeys.includes(k)) &&
-    existing.availableUsers.length === newWin.availableUsers.length &&
-    existing.availableUsers.every((u: string) => newWin.availableUsers.includes(u))
+    (existing.availableIds || []).length === (newWin.availableIds || []).length &&
+    (existing.availableIds || []).every((id: string) => (newWin.availableIds || []).includes(id))
   );
 
   const tryAdd = (win: any) => {
@@ -288,8 +319,8 @@ export const findBestDateWindows = (
       top3.push({
         ...win,
         recommendReason: resolveRecommendationReason(win, {
-          hasVips: vipNickNames.length > 0,
-          vipTotal: vipNickNames.length,
+          hasVips: vipKeys.size > 0,
+          vipTotal: vipKeys.size,
           maxAvailable
         }),
         downgradeHint

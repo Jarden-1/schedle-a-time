@@ -37,7 +37,12 @@ export default function CreateEvent() {
   function getToday(addDays = 0): string {
     const date = new Date();
     date.setDate(date.getDate() + addDays);
-    return date.toISOString().split('T')[0];
+    // 🚨 必须用本地年月日，toISOString() 取的是 UTC 日期，
+    // 东八区 00:00–07:59 之间会把「今天」算成昨天
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   }
 
   // 🚨 核心逻辑抽离：真正向后端发请求的动作
@@ -123,12 +128,25 @@ export default function CreateEvent() {
 
       const snappedStart = snapTime(form.startTime, form.granularity, 'start');
       const snappedEnd = snapTime(form.endTime, form.granularity, 'end');
-      
+
       if (snappedStart !== form.startTime || snappedEnd !== form.endTime) {
         Taro.showToast({ title: '已自动按时间粒度对齐', icon: 'none', duration: 2000 });
         payloadForm.startTime = snappedStart;
         payloadForm.endTime = snappedEnd;
         setForm(payloadForm);
+      }
+
+      // 🚨 拒绝「零可选格子」的活动：避免创建出来谁都没法选
+      const previewSlots = generateTimeSlots(
+        payloadForm.startDate,
+        payloadForm.endDate,
+        payloadForm.startTime || '00:00',
+        payloadForm.endTime || '00:00',
+        payloadForm.granularity
+      );
+      if (previewSlots.length === 0) {
+        Taro.showToast({ title: '时间范围不足一个粒度，请调整时段', icon: 'none' });
+        return;
       }
     }
 

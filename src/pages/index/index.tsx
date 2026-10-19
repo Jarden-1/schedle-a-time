@@ -83,13 +83,14 @@ export default function Index() {
 
     const isAdmin = !!(openid && Array.isArray(event.adminIds) && event.adminIds.includes(openid));
 
+    const hasSubmitted = (p: any) => (
+      p?.hasSubmitted === true || (Array.isArray(p?.availableSlots) && p.availableSlots.length > 0)
+    );
+
     const isParticipant =
       !!userNickName &&
       !!event.participants?.some(
-        (p) =>
-          (p?.openid === openid || p?.nickName === userNickName) &&
-          Array.isArray(p.availableSlots) &&
-          p.availableSlots.length > 0
+        (p) => (p?.openid === openid || p?.nickName === userNickName) && hasSubmitted(p)
       );
 
     if (activeTab === 'all') return isCreator || isAdmin || isParticipant;
@@ -314,8 +315,10 @@ export default function Index() {
             }
             const isAdmin = !!(openid && Array.isArray(event.adminIds) && event.adminIds.includes(openid));
 
-            const submittedCount =
-              event.participants?.filter((p) => Array.isArray(p.availableSlots) && p.availableSlots.length > 0).length || 0;
+            // 优先用服务端下发的已填写人数（决策不公开时他人时段会被裁剪）
+            const submittedCount = typeof event.submittedCount === 'number'
+              ? event.submittedCount
+              : event.participants?.filter((p) => p.hasSubmitted === true || (Array.isArray(p.availableSlots) && p.availableSlots.length > 0)).length || 0;
 
             const card = (
               <View className={`event-card ${peekIndex === index && swipeType !== 'none' ? 'peek-bounce' : ''}`}>

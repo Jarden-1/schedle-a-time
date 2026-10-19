@@ -51,6 +51,8 @@ export interface ParticipantAvailability {
   avatarUrl?: string; // 新增：用户头像
   openid?: string;    // 新增：用户唯一标识
   availableSlots: string[];
+  /** 是否提交过（允许提交空数组，表示「已填写但全部没空」） */
+  hasSubmitted?: boolean;
   submittedAt: string;
 }
 
@@ -83,6 +85,12 @@ export interface Event {
   confirmedSlot?: TimeSlot | null;
   createdAt: string;
   updatedAt: string;
+  /** 已填写人数（服务端下发，避免前端推算泄露他人数据） */
+  submittedCount?: number;
+  /** 当前浏览者是否可管理该活动 */
+  viewerCanManage?: boolean;
+  /** 服务端是否因「决策不公开」裁剪了他人时间 */
+  decisionRedacted?: boolean;
 }
 
 // 候选时间统计
@@ -90,6 +98,10 @@ export interface CandidateSlot {
   slot: TimeSlot;
   availableCount: number;
   totalCount: number;
+  /** 稳定身份（participantId/openid），用于求交集与统计 */
+  availableIds: string[];
+  unavailableIds: string[];
+  /** 仅用于展示的显示名，长度与 availableIds 一一对应 */
   availableUsers: string[];
   unavailableUsers: string[];
   matchRate: number;

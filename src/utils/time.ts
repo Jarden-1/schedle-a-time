@@ -38,8 +38,10 @@ export const timeToMinutes = (time: string): number => {
 };
 
 export const minutesToTime = (minutes: number): string => {
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
+  // 允许 24:00 作为「当天结束」的边界，否则 23:30 起的最后一个格子会被截掉
+  const safe = Math.max(0, Math.min(Math.round(minutes), 24 * 60));
+  const hours = Math.floor(safe / 60);
+  const mins = safe % 60;
   return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
 };
 
@@ -87,6 +89,13 @@ export const snapTime = (timeStr: string, granularity: number, type: 'start' | '
   } else {
     snappedMinutes = Math.ceil(minutes / granularity) * granularity;
   }
-  snappedMinutes = Math.min(Math.max(snappedMinutes, 0), 24 * 60 - 1);
+  const upperBound = type === 'end' ? 24 * 60 : 24 * 60 - 1;
+  snappedMinutes = Math.min(Math.max(snappedMinutes, 0), upperBound);
   return minutesToTime(snappedMinutes);
+};
+
+/** 结束时间是否合法（允许 24:00 表示当天结束） */
+export const isValidEndTime = (timeStr: string): boolean => {
+  if (timeStr === '24:00') return true;
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(timeStr || '');
 };

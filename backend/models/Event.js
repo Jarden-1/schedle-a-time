@@ -10,6 +10,8 @@ const ParticipantSchema = new mongoose.Schema({
   eventDisplayName: String,
   avatarUrl: String,
   availableSlots: [String],
+  // 是否提交过（允许提交空数组，表示「已填写但全部没空」）
+  hasSubmitted: Boolean,
   submittedAt: String
 }, { _id: false });
 

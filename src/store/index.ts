@@ -514,6 +514,16 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   getEventById: async (eventId: string) => {
     set({ loading: true, eventLoadError: null });
+
+    // 🚨 活动已被删除时必须清掉缓存，否则页面会一直从旧数据里「复活」它
+    const dropCachedEvent = () => {
+      set((state) => {
+        const remaining = state.events.filter(e => e.id !== eventId);
+        Taro.setStorageSync('events', remaining);
+        return { events: remaining };
+      });
+    };
+
     try {
       const result = await requestAPI(`/events/${eventId}`, 'GET');
 
@@ -530,13 +540,9 @@ export const useAppStore = create<AppState>((set, get) => ({
         return eventData;
       }
 
-      const { events } = get();
-      const localEvent = events.find(e => e.id === eventId);
-      if (localEvent) {
-        set({ currentEvent: localEvent, loading: false });
-        return localEvent;
-      }
+      dropCachedEvent();
       set({
+        currentEvent: null,
         loading: false,
         eventLoadError: { type: 'not_found', message: '活动不存在或已删除' }
       });
@@ -546,12 +552,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       const loadError = normalizeEventLoadError(error);
 
       if (loadError.type === 'auth' || loadError.type === 'not_found') {
+        if (loadError.type === 'not_found') dropCachedEvent();
         set({ currentEvent: null, loading: false, eventLoadError: loadError });
         return null;
       }
 
-      const { events } = get();
-      const localEvent = events.find(e => e.id === eventId);
+      // 只有网络类错误才允许用只读缓存兜底
+      const localEvent = get().events.find(e => e.id === eventId);
       set({ currentEvent: localEvent || null, loading: false, eventLoadError: localEvent ? null : loadError });
       return localEvent || null;
     }

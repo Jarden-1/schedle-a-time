@@ -16,7 +16,7 @@ export default function EventParticipants() {
   const [showVipGuide, setShowVipGuide] = useState(false);
   const [guideTargetIndex, setGuideTargetIndex] = useState(-1);
 
-  const { events, getEventById, manageMemberAPI, currentUser } = useAppStore();
+  const { getEventById, manageMemberAPI, currentUser } = useAppStore();
 
   const loadEvent = useCallback(
     async (id: string) => {
@@ -24,12 +24,16 @@ export default function EventParticipants() {
       if (cloudEvent) {
         setEvent(cloudEvent);
       } else {
-        const localEvent = events.find((e) => e.id === id);
-        if (localEvent) setEvent(localEvent);
+        // 只有网络类错误才回退缓存；404 说明活动已被删除
+        const { eventLoadError: loadError, events: cachedEvents } = useAppStore.getState();
+        if (loadError?.type !== 'not_found' && loadError?.type !== 'auth') {
+          const localEvent = cachedEvents.find((e) => e.id === id);
+          if (localEvent) setEvent(localEvent);
+        }
       }
       setInitialLoading(false);
     },
-    [events, getEventById]
+    [getEventById]
   );
 
   useLoad(async (options) => {
@@ -260,7 +264,9 @@ export default function EventParticipants() {
     );
   }
 
-  const submittedCount = event.participants.filter((p: any) => Array.isArray(p.availableSlots) && p.availableSlots.length > 0).length;
+  const submittedCount = typeof event.submittedCount === 'number'
+    ? event.submittedCount
+    : event.participants.filter((p: any) => p.hasSubmitted === true || (Array.isArray(p.availableSlots) && p.availableSlots.length > 0)).length;
 
   const closeGuide = () => {
     if (showVipGuide) {
