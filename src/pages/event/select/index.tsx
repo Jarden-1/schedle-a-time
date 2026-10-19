@@ -342,6 +342,8 @@ export default function SelectTime() {
   if (!isProxyMode && !hasCompleteUserProfile(currentUser)) {
     return (
       <View className="select-page">
+        {/* 页面已禁止滚动，登录卡片需要自己能滚，避免小屏被裁切 */}
+        <ScrollView scrollY className="select-scroll">
         <View className="select-login-card">
           <LoginCard
             title="请先登录后选择时间"
@@ -357,6 +359,7 @@ export default function SelectTime() {
             }}
           />
         </View>
+        </ScrollView>
       </View>
     );
   }
@@ -373,7 +376,8 @@ export default function SelectTime() {
         </View>
       </View>
 
-      <View className="top-operation-panel">
+      <ScrollView scrollY className="select-scroll" enhanced showScrollbar={false}>
+        <View className="top-operation-panel">
         <View className="top-operation-row">
           <View className="legend">
             <View className="legend-item">
@@ -443,7 +447,7 @@ export default function SelectTime() {
           />
         </View>
       ) : (
-        <ScrollView className="time-grid-container" scrollY scrollWithAnimation>
+        <View className="time-grid-container">
           <View className="date-section" style={{ marginTop: '10px' }}>
             <View className="slots-grid">
               {timeSlots.map((slot) => (
@@ -457,8 +461,9 @@ export default function SelectTime() {
               ))}
             </View>
           </View>
-        </ScrollView>
+        </View>
       )}
+      </ScrollView>
 
       <View className="footer">
         <View className="action-buttons">
