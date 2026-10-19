@@ -44,7 +44,12 @@ const backfillHasSubmitted = async () => {
 
       const slots = Array.isArray(plain.availableSlots) ? plain.availableSlots : [];
       const isCreator = !!plain.openid && plain.openid === event.creatorId;
-      const inferred = slots.length > 0 || (!isCreator && !!plain.submittedAt);
+      // 发起人的 submittedAt 在创建时就写好了，只有晚于 createdAt 才说明是后来真的提交过
+      const creatorSubmittedLater = !!plain.submittedAt && !!event.createdAt
+        && String(plain.submittedAt) > String(event.createdAt);
+      const inferred = slots.length > 0
+        || (!isCreator && !!plain.submittedAt)
+        || (isCreator && creatorSubmittedLater);
 
       // 字段缺失时一律显式写成布尔值，避免前端还要做兜底推断
       dirty = true;
