@@ -459,15 +459,21 @@ export default function TimeGridSelector(props: Props) {
             })}
           </View>
 
-          <View
-            id={wrapperId}
-            className="time-grid-wrapper"
-            catchMove={forceDragMode}
-            onTouchStart={onTouchStart as any}
-            onTouchMove={onTouchMove as any}
-            onTouchEnd={onTouchEnd as any}
-            onTouchCancel={onTouchEnd as any}
-          >
+          {/*
+            🚨 关键：catchtouchmove 必须和手势处理分在两层。
+            挂在同一个节点上时，Taro 会把手势绑定切成 catch，
+            内层的 onTouchMove 就不再触发（表现就是「长按后拖不动」）。
+            外层 catchMove 负责冻结页面与横向滚动，内层照常接收触摸事件。
+          */}
+          <View className="time-grid-gesture-lock" catchMove={forceDragMode || isDragging}>
+            <View
+              id={wrapperId}
+              className="time-grid-wrapper"
+              onTouchStart={onTouchStart as any}
+              onTouchMove={onTouchMove as any}
+              onTouchEnd={onTouchEnd as any}
+              onTouchCancel={onTouchEnd as any}
+            >
             {Array.from({ length: gridSize.rows }).map((_, r) => {
               const cellKeys = cellKeyByPos[r] || [];
               const selectedMask = cellKeys.map(k => (k && renderSelected.has(k) ? '1' : '0')).join('');
@@ -489,6 +495,7 @@ export default function TimeGridSelector(props: Props) {
                 />
               );
             })}
+            </View>
           </View>
         </View>
       </ScrollView>

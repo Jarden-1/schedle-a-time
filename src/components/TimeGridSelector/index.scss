@@ -127,6 +127,11 @@
   white-space: nowrap;
 }
 
+.time-grid-gesture-lock {
+  /* 只做 catchtouchmove 的承载层，不参与布局 */
+  display: block;
+}
+
 .time-grid-wrapper {
   display: flex;
   flex-direction: column;
