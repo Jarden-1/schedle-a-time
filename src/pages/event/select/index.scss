@@ -1,8 +1,5 @@
 .select-page {
-  /* 🚨 固定视口高度：页面本身不允许滚动，只有中间的 .select-scroll 会滚。
-     iOS 上页面弹性滚动是「拖选时整屏乱动」的根源之一。 */
-  height: 100vh;
-  overflow: hidden;
+  min-height: 100vh;
   background: #f5f5f5;
   display: flex;
   flex-direction: column;
@@ -35,15 +32,7 @@
     padding: 16px;
   }
 
-  /* 页面唯一允许纵向滚动的区域 */
-  .select-scroll {
-    flex: 1;
-    min-height: 0;
-    -webkit-overflow-scrolling: touch;
-  }
-
   .header {
-    flex-shrink: 0;
     background: #fff;
     padding: 20px;
     border-bottom: 1px solid #eee;
@@ -91,11 +80,14 @@
   }
 
   .time-grid-container {
-    padding: 12px 16px 16px;
+    flex: 1;
+    padding: 16px;
+    overflow-y: auto;
     width: 100%;
     box-sizing: border-box; /* 🚨 核心防御：防止 padding 撑爆屏幕 */
 
     &--matrix {
+      overflow-y: auto;
       padding: 12px;
       width: 100%;
       box-sizing: border-box;
@@ -285,7 +277,6 @@
   }
 
   .footer {
-    flex-shrink: 0;
     background: #fff;
     padding: 16px 20px 32px;
     border-top: 1px solid #eee;
