@@ -301,6 +301,83 @@ export default function EventDetail() {
     ? event.submittedCount
     : event?.participants.filter(participantHasSubmitted).length || 0;
 
+  // 🚨 发起人/管理员：停止收集（两次提醒，避免误触后参与者无法继续填写）
+  const handleStopCollect = async () => {
+    if (!event) return;
+
+    const first = await Taro.showModal({
+      title: '停止收集空闲时间？',
+      content: '停止后所有参与者都无法再新增或修改时间，已提交的记录会原样保留。',
+      confirmText: '继续',
+      cancelText: '取消'
+    });
+    if (!first.confirm) return;
+
+    const second = await Taro.showModal({
+      title: '再次确认停止',
+      content: `确定要停止「${event.title}」的时间收集吗？\n停止后活动进入“已停止收集”状态，需要你手动重新开启才能继续填写。`,
+      confirmText: '确认停止',
+      confirmColor: '#ff4d4f',
+      cancelText: '再想想'
+    });
+    if (!second.confirm) return;
+
+    setActionLoading(true);
+    Taro.showLoading({ title: '停止中' });
+    try {
+      const success = typeof updateEventAPI === 'function'
+        ? await updateEventAPI(event.id, { status: EventStatus.CLOSED })
+        : false;
+      if (success) {
+        track(TRACK.EVENT_STOP_COLLECT, { submittedCount });
+        Taro.showToast({ title: '已停止收集', icon: 'success' });
+        loadEvent(event.id);
+      } else {
+        Taro.showToast({ title: '停止失败，请刷新后重试', icon: 'none' });
+        loadEvent(event.id);
+      }
+    } catch (e) {
+      Taro.showToast({ title: '停止失败，请刷新后重试', icon: 'none' });
+    } finally {
+      Taro.hideLoading();
+      setActionLoading(false);
+    }
+  };
+
+  // 🚨 停止后可反悔：继续收集
+  const handleReopenCollect = async () => {
+    if (!event) return;
+    const { confirm } = await Taro.showModal({
+      title: '继续收集空闲时间？',
+      content: '继续收集后，参与者可以重新填写和修改自己的空闲时间。',
+      confirmText: '继续收集',
+      confirmColor: '#07c160',
+      cancelText: '取消'
+    });
+    if (!confirm) return;
+
+    setActionLoading(true);
+    Taro.showLoading({ title: '开启中' });
+    try {
+      const success = typeof updateEventAPI === 'function'
+        ? await updateEventAPI(event.id, { status: EventStatus.ACTIVE })
+        : false;
+      if (success) {
+        track(TRACK.EVENT_REOPEN_COLLECT);
+        Taro.showToast({ title: '已恢复收集', icon: 'success' });
+        loadEvent(event.id);
+      } else {
+        Taro.showToast({ title: '开启失败，请刷新后重试', icon: 'none' });
+        loadEvent(event.id);
+      }
+    } catch (e) {
+      Taro.showToast({ title: '开启失败，请刷新后重试', icon: 'none' });
+    } finally {
+      Taro.hideLoading();
+      setActionLoading(false);
+    }
+  };
+
   // 🚨 根据 allowInvite 严格控制普通参与者分享权限
   useEffect(() => {
     if (!event) {
@@ -389,7 +466,7 @@ export default function EventDetail() {
             <Text>
               {normalizedStatus === 'ACTIVE' ? '🟢 进行中' : null}
               {normalizedStatus === 'CONFIRMED' ? '🎉 已确认' : null}
-              {normalizedStatus === 'CLOSED' ? '⛔ 已关闭' : null}
+              {normalizedStatus === 'CLOSED' ? '⛔ 已停止收集' : null}
             </Text>
           </View>
         </View>
@@ -529,8 +606,8 @@ export default function EventDetail() {
         )}
       </View>
 
-      {/* 🚨 核心修复：如果是管理员，或者决策面板设置为公开，都可以看到此入口 */}
-      {(canManage || event.isDecisionPublic) && normalizedStatus === 'ACTIVE' ? (
+      {/* 🚨 发起人/管理员任何状态都能查看决策面板；普通参与者仅在面板公开且未确认时可看 */}
+      {(canManage || (event.isDecisionPublic && normalizedStatus !== 'CONFIRMED')) ? (
         <View className="creator-actions">
           <Text className="card-title">
             {canManage ? (isCreator ? '发起人操作' : '管理员操作') : '实时决策面板'}
@@ -543,8 +620,8 @@ export default function EventDetail() {
             查看决策面板
           </Button>
 
-          {/* 🚨 邀请按钮依然严格仅限发起人/管理员在此处显示 */}
-          {canManage ? (
+          {/* 🚨 邀请 / 代填只在收集进行中才有意义 */}
+          {canManage && normalizedStatus === 'ACTIVE' ? (
             <>
               <Button
                 className="btn-outline share-btn"
@@ -563,6 +640,34 @@ export default function EventDetail() {
                 <Text>✍️ 代填空闲时间</Text>
               </Button>
             </>
+          ) : null}
+
+          {/* 🚨 停止收集：发起人/管理员专属，放在操作区最后，点击后需要二次确认 */}
+          {canManage && normalizedStatus === 'ACTIVE' ? (
+            <View className="stop-collect-block">
+              <Button
+                className="stop-collect-btn"
+                onClick={handleStopCollect}
+                disabled={actionLoading}
+              >
+                停止收集
+              </Button>
+              <Text className="stop-collect-hint">停止后参与者无法再修改时间，已填写的记录会保留</Text>
+            </View>
+          ) : null}
+
+          {/* 🚨 已停止收集时，只有发起人/管理员能看到重新开启入口 */}
+          {canManage && normalizedStatus === 'CLOSED' ? (
+            <View className="stop-collect-block">
+              <Button
+                className="reopen-collect-btn"
+                onClick={handleReopenCollect}
+                disabled={actionLoading}
+              >
+                继续收集
+              </Button>
+              <Text className="stop-collect-hint">当前已停止收集，继续收集后参与者可以继续填写</Text>
+            </View>
           ) : null}
         </View>
       ) : null}

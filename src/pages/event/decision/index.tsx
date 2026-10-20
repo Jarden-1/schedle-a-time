@@ -1,5 +1,5 @@
 import Taro, { useLoad } from '@tarojs/taro';
-import { View, Text, Button, ScrollView, Image, Slider } from '@tarojs/components';
+import { View, Text, Button, ScrollView, Image, Slider, Switch } from '@tarojs/components';
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { Event, CandidateSlot, TimeMode } from '@/types';
 import { useAppStore } from '@/store';
@@ -22,6 +22,7 @@ export default function DecisionPanel() {
   const [forceDragMode, setForceDragMode] = useState(false);
 
   const [confirming, setConfirming] = useState(false);
+  const [privacySaving, setPrivacySaving] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [targetDuration, setTargetDuration] = useState<number | null>(null);
 
@@ -42,7 +43,7 @@ export default function DecisionPanel() {
   const weekNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
   const isDateOnly = event?.timeMode === TimeMode.DATE_ONLY || (event?.timeMode as any) === 'DATE_ONLY';
 
-  const { confirmTimeAPI, getEventById, currentUser } = useAppStore();
+  const { confirmTimeAPI, getEventById, currentUser, updateEventAPI } = useAppStore();
 
   const formatDurationLabel = (minutes: number) => {
     if (minutes < 60) return `${minutes}分钟`;
@@ -374,6 +375,45 @@ export default function DecisionPanel() {
     }
   };
 
+  // 🚨 发起人/管理员专属：决定这个决策面板对普通参与者是否公开
+  const handleToggleDecisionPublic = async (next: boolean) => {
+    if (!event || !canManage || privacySaving) return;
+    if ((event.isDecisionPublic === true) === next) return;
+
+    if (!next) {
+      const { confirm } = await Taro.showModal({
+        title: '关闭决策面板公开？',
+        content: '关闭后普通参与者将无法查看热力图、推荐方案和他人时间，只有发起人与管理员可见。',
+        confirmText: '关闭公开',
+        confirmColor: '#ff4d4f',
+        cancelText: '取消'
+      });
+      if (!confirm) return;
+    }
+
+    const previous = event.isDecisionPublic === true;
+    setPrivacySaving(true);
+    setEvent(prev => (prev ? { ...prev, isDecisionPublic: next } : prev));
+    try {
+      const success = typeof updateEventAPI === 'function'
+        ? await updateEventAPI(event.id, { isDecisionPublic: next })
+        : false;
+      if (!success) throw new Error('update failed');
+
+      track(TRACK.DECISION_PUBLIC_TOGGLE, { isDecisionPublic: next ? 1 : 0 });
+      Taro.showToast({ title: next ? '已公开决策面板' : '已关闭公开', icon: 'success' });
+
+      // 服务端会按新的公开状态重新裁剪参与者时段，这里同步一次
+      const refreshed = await getEventById(event.id);
+      if (refreshed) setEvent(refreshed);
+    } catch (e) {
+      setEvent(prev => (prev ? { ...prev, isDecisionPublic: previous } : prev));
+      Taro.showToast({ title: '设置失败，请重试', icon: 'none' });
+    } finally {
+      setPrivacySaving(false);
+    }
+  };
+
   if (initialLoading) {
     return (
       <View className="decision-page">
@@ -418,6 +458,37 @@ export default function DecisionPanel() {
           )}
         </View>
       </View>
+
+      {/* 🚨 发起人/管理员：控制面板对普通参与者是否公开 */}
+      {canManage ? (
+        <View className="publicity-card">
+          <View className="publicity-copy">
+            <View className="publicity-title-row">
+              <Text className="publicity-title">公开决策面板</Text>
+              <Text className={`publicity-state ${event.isDecisionPublic ? 'on' : 'off'}`}>
+                {event.isDecisionPublic ? '已公开' : '仅管理员'}
+              </Text>
+            </View>
+            <Text className="publicity-desc">
+              {event.isDecisionPublic
+                ? '所有参与者都能查看热力图、推荐方案和谁没空'
+                : '仅发起人与管理员可见，参与者打开会提示“面板未公开”'}
+            </Text>
+            <Text className="publicity-role">仅发起人与管理员可修改</Text>
+          </View>
+          <Switch
+            className="publicity-switch"
+            checked={event.isDecisionPublic === true}
+            disabled={privacySaving}
+            color="#07c160"
+            onChange={(e: any) => handleToggleDecisionPublic(!!(e.detail.value ?? e.detail.checked))}
+          />
+        </View>
+      ) : (
+        <View className="publicity-banner">
+          <Text className="publicity-banner-text">🌐 发起人已公开决策面板，你可以查看全部时间安排</Text>
+        </View>
+      )}
 
       {candidateSlots.length > 0 ? (
         <>

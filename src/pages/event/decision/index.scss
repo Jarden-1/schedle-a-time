@@ -314,6 +314,88 @@
     }
   }
 
+  /* 🚨 发起人/管理员专属：决策面板公开开关 */
+  .publicity-card {
+    background: #fff;
+    margin: 16px 16px 0;
+    padding: 16px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+
+    .publicity-copy {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .publicity-title-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .publicity-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .publicity-state {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 10px;
+      line-height: 16px;
+
+      &.on {
+        color: #078f49;
+        background: rgba(7, 193, 96, 0.1);
+      }
+
+      &.off {
+        color: #8a8a8a;
+        background: #f2f2f2;
+      }
+    }
+
+    .publicity-desc {
+      font-size: 12px;
+      color: #999;
+      line-height: 1.5;
+    }
+
+    .publicity-role {
+      font-size: 11px;
+      color: #bbb;
+      line-height: 1.4;
+    }
+
+    .publicity-switch {
+      transform: scale(0.85);
+      flex-shrink: 0;
+    }
+  }
+
+  /* 普通参与者视角：只读提示，不提供开关 */
+  .publicity-banner {
+    margin: 16px 16px 0;
+    padding: 10px 14px;
+    border-radius: 10px;
+    background: rgba(7, 193, 96, 0.08);
+
+    .publicity-banner-text {
+      font-size: 12px;
+      color: #078f49;
+      line-height: 1.5;
+    }
+  }
+
   .duration-filter {
     background: #fff;
     margin: 16px 16px 0;

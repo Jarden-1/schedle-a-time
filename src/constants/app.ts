@@ -33,6 +33,9 @@ export const TRACK = {
 
   EVENT_SHARE: 'event_share',
   EVENT_REVOKE_CONFIRM: 'event_revoke_confirm',
+  EVENT_STOP_COLLECT: 'event_stop_collect',
+  EVENT_REOPEN_COLLECT: 'event_reopen_collect',
+  DECISION_PUBLIC_TOGGLE: 'decision_public_toggle',
   EVENT_LEAVE: 'event_leave',
   MEMBER_ACTION: 'member_action',
   WEEKLY_SETTINGS_SAVE: 'weekly_settings_save',
